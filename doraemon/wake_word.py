@@ -257,15 +257,30 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
                     "trim", "0", str(segment_duration),
                 ],
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 timeout=segment_duration + 5,
             )
             raw_data = proc.stdout
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+            sox_stderr = proc.stderr.decode(errors="replace").strip()
+            if proc.returncode != 0:
+                print(f"[Termux] sox exited with code {proc.returncode}: {sox_stderr}")
+                continue
+            if sox_stderr:
+                print(f"[Termux] sox warning: {sox_stderr}")
+        except subprocess.TimeoutExpired:
+            print("[Termux] sox recording timed out")
+            continue
+        except FileNotFoundError:
+            print("[Termux] sox not found")
             continue
 
         if not raw_data:
+            print("[Termux] sox returned no audio data")
             continue
+
+        audio_bytes = len(raw_data)
+        audio_seconds = audio_bytes / (sample_rate * sample_width * channels)
+        print(f"[Termux] Recorded {audio_bytes} bytes ({audio_seconds:.1f}s)")
 
         # Wrap raw PCM in AudioData for SpeechRecognition
         audio = sr.AudioData(raw_data, sample_rate, sample_width)
@@ -273,7 +288,7 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         try:
             text = recognizer.recognize_google(audio)
         except sr.UnknownValueError:
-            # No speech detected in this segment — normal, keep listening
+            print("[Termux] (no speech detected)")
             continue
         except sr.RequestError as exc:
             print(f"[Termux] Speech API error: {exc}")
