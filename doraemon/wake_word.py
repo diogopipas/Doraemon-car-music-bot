@@ -196,12 +196,26 @@ def _wait_porcupine(*, stop_event=None) -> bool:
 # Speech-recognition fallback (Termux only)
 # ---------------------------------------------------------------------------
 
+def _matches_wake_word(text: str, wake_word: str) -> bool:
+    """
+    Check whether *text* contains the wake word, tolerating the many ways
+    speech recognition might transcribe "doraemon":
+      "Doraemon", "Dora Emon", "dora e mon", "Doremon", "Dora Amon", etc.
+
+    Strategy: strip all spaces/hyphens/punctuation from both strings and
+    do a substring check, so "dora e mon" → "doraemon" matches "doraemon".
+    """
+    import re
+    normalise = lambda s: re.sub(r"[\s\-'\".,!?]+", "", s.lower())
+    return normalise(wake_word) in normalise(text)
+
+
 def _wait_speech_recognition(*, stop_event=None) -> bool:
     """
     Continuously record short clips with sox and run Google Speech Recognition
     to detect the wake word.
 
-    Records 2-second segments in a loop.  If the recognised text contains
+    Records 3-second segments in a loop.  If the recognised text contains
     the configured wake word (default "doraemon"), returns True.
     """
     import shutil
@@ -209,7 +223,7 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
     import speech_recognition as sr
 
     wake_word = config.WAKE_WORD.lower()
-    segment_duration = 2  # seconds per listening segment
+    segment_duration = 3  # seconds per listening segment
     sample_rate = config.PORCUPINE_SAMPLE_RATE  # 16 000 Hz
     sample_width = 2  # 16-bit
     channels = 1
@@ -258,10 +272,20 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
 
         try:
             text = recognizer.recognize_google(audio)
-        except (sr.UnknownValueError, sr.RequestError):
+        except sr.UnknownValueError:
+            # No speech detected in this segment — normal, keep listening
+            continue
+        except sr.RequestError as exc:
+            print(f"[Termux] Speech API error: {exc}")
             continue
 
-        if text and wake_word in text.lower():
+        if not text:
+            continue
+
+        # Show what was heard so the user can diagnose issues
+        print(f'[Termux] Heard: "{text}"')
+
+        if _matches_wake_word(text, wake_word):
             return True
 
 
