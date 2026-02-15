@@ -1,9 +1,12 @@
 """Speech recognition for capturing song names after wake word."""
 
 import io
+import os
 import shutil
 import struct
 import subprocess
+import tempfile
+import time
 import wave
 
 import speech_recognition as sr
@@ -12,27 +15,66 @@ from . import config
 from .audio import IS_TERMUX
 
 
-def _record_wav_termux(duration: int) -> sr.AudioData | None:
+def _record_raw_termux(duration: int, sample_rate: int = 16000):
     """
-    Record audio using sox in Termux and return it as SpeechRecognition AudioData.
+    Record audio in Termux. Prefer termux-microphone-record (real mic) if
+    available; otherwise sox + PulseAudio (often only speaker monitor).
+    Returns (raw_pcm_bytes, sample_rate) or (None, None).
+    """
+    sample_width = 2
+    termux_rec = shutil.which("termux-microphone-record")
+    ffmpeg_path = shutil.which("ffmpeg")
+    if termux_rec and ffmpeg_path:
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".opus", delete=False) as f:
+                rec_path = f.name
+            subprocess.run(
+                [
+                    termux_rec,
+                    "-l", str(duration),
+                    "-f", rec_path,
+                    "-e", "opus",
+                    "-r", "16000",
+                    "-c", "1",
+                ],
+                capture_output=True,
+                timeout=5,
+            )
+            time.sleep(duration + 1)
+            try:
+                with open(rec_path, "rb") as f:
+                    data = f.read()
+            finally:
+                try:
+                    os.unlink(rec_path)
+                except Exception:
+                    pass
+            if not data or len(data) < 100:
+                return None, None
+            proc = subprocess.run(
+                [
+                    ffmpeg_path,
+                    "-i", "-",
+                    "-f", "s16le",
+                    "-acodec", "pcm_s16le",
+                    "-ar", str(sample_rate),
+                    "-ac", "1",
+                    "-",
+                ],
+                input=data,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            if proc.returncode == 0 and proc.stdout:
+                return proc.stdout, sample_rate
+        except Exception:
+            pass
+        return None, None
 
-    Since PyAudio/sr.Microphone cannot access the mic in Termux, we capture
-    a fixed-length WAV via sox, then wrap it for the recognizer.
-    """
     sox_path = shutil.which("sox")
     if not sox_path:
-        raise FileNotFoundError(
-            "sox not found. In Termux run: pkg install sox pulseaudio"
-        )
-
-    sample_rate = 16000
-    sample_width = 2  # 16-bit
-    channels = 1
-
-    # Record raw PCM bytes for `duration` seconds
-    byte_count = sample_rate * sample_width * channels * duration
-    frame_count = sample_rate * duration
-
+        return None, None
     pulse_source = config.PULSE_SOURCE or "default"
     try:
         proc = subprocess.run(
@@ -44,7 +86,7 @@ def _record_wav_termux(duration: int) -> sr.AudioData | None:
                 "-b", "16",
                 "-e", "signed-integer",
                 "-L",
-                "-c", str(channels),
+                "-c", "1",
                 "-",
                 "trim", "0", str(duration),
             ],
@@ -52,23 +94,25 @@ def _record_wav_termux(duration: int) -> sr.AudioData | None:
             stderr=subprocess.DEVNULL,
             timeout=duration + 5,
         )
-        raw_data = proc.stdout
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return None
+        if proc.returncode == 0 and proc.stdout:
+            return proc.stdout, sample_rate
+    except Exception:
+        pass
+    return None, None
 
+
+def _record_wav_termux(duration: int) -> sr.AudioData | None:
+    """
+    Record audio in Termux and return SpeechRecognition AudioData.
+    Uses termux-microphone-record (Termux:API) when available for the real mic;
+    otherwise sox + PulseAudio.
+    """
+    sample_rate = 16000
+    sample_width = 2
+    raw_data, rate = _record_raw_termux(duration, sample_rate)
     if not raw_data:
         return None
-
-    # Wrap raw PCM into WAV bytes for SpeechRecognition
-    wav_buf = io.BytesIO()
-    with wave.open(wav_buf, "wb") as wf:
-        wf.setnchannels(channels)
-        wf.setsampwidth(sample_width)
-        wf.setframerate(sample_rate)
-        wf.writeframes(raw_data)
-    wav_bytes = wav_buf.getvalue()
-
-    return sr.AudioData(raw_data, sample_rate, sample_width)
+    return sr.AudioData(raw_data, rate, sample_width)
 
 
 def listen_for_song_name() -> str | None:

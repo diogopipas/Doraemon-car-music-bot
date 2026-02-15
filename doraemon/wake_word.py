@@ -210,74 +210,143 @@ def _matches_wake_word(text: str, wake_word: str) -> bool:
     return normalise(wake_word) in normalise(text)
 
 
+def _record_segment_termux(duration_sec: int, sample_rate: int):
+    """
+    Record a short segment on Termux. Prefer termux-microphone-record (real mic)
+    if available; otherwise fall back to sox + PulseAudio (often only captures
+    speaker monitor, not mic).
+
+    Returns (raw_pcm_bytes, sample_rate) or (None, None) on failure.
+    """
+    import os
+    import shutil
+    import tempfile
+    import time
+
+    # 1) Try Termux:API microphone (actual mic on Android)
+    termux_rec = shutil.which("termux-microphone-record")
+    ffmpeg_path = shutil.which("ffmpeg")
+    if termux_rec and ffmpeg_path:
+        try:
+            with tempfile.NamedTemporaryFile(
+                suffix=".opus", delete=False
+            ) as f:
+                rec_path = f.name
+            subprocess.run(
+                [
+                    termux_rec,
+                    "-l", str(duration_sec),
+                    "-f", rec_path,
+                    "-e", "opus",
+                    "-r", "16000",
+                    "-c", "1",
+                ],
+                capture_output=True,
+                timeout=5,
+            )
+            time.sleep(duration_sec + 1)  # API records in background
+            try:
+                with open(rec_path, "rb") as f:
+                    data = f.read()
+            finally:
+                try:
+                    os.unlink(rec_path)
+                except Exception:
+                    pass
+            if not data or len(data) < 100:
+                return None, None
+            # Convert opus → raw 16kHz mono 16-bit PCM
+            proc = subprocess.run(
+                [
+                    ffmpeg_path,
+                    "-i", "-",
+                    "-f", "s16le",
+                    "-acodec", "pcm_s16le",
+                    "-ar", str(sample_rate),
+                    "-ac", "1",
+                    "-",
+                ],
+                input=data,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+            if proc.returncode == 0 and proc.stdout:
+                return proc.stdout, sample_rate
+        except Exception:
+            pass
+        return None, None
+
+    # 2) Fallback: sox from PulseAudio (on many Termux setups only sink.monitor = speaker)
+    sox_path = shutil.which("sox")
+    if not sox_path:
+        return None, None
+    pulse_source = getattr(config, "PULSE_SOURCE", "default") or "default"
+    try:
+        proc = subprocess.run(
+            [
+                sox_path,
+                "-t", "pulseaudio", pulse_source,
+                "-t", "raw",
+                "-r", str(sample_rate),
+                "-b", "16",
+                "-e", "signed-integer",
+                "-L",
+                "-c", "1",
+                "-",
+                "trim", "0", str(duration_sec),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=duration_sec + 5,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            return proc.stdout, sample_rate
+    except Exception:
+        pass
+    return None, None
+
+
 def _wait_speech_recognition(*, stop_event=None) -> bool:
     """
-    Continuously record short clips with sox and run Google Speech Recognition
+    Continuously record short clips and run Google Speech Recognition
     to detect the wake word.
 
-    Records 3-second segments in a loop.  If the recognised text contains
-    the configured wake word (default "doraemon"), returns True.
+    On Termux, uses termux-microphone-record (Termux:API) when available so
+    the real mic is used; otherwise sox+PulseAudio (which often only has
+    speaker monitor, not mic).
     """
+    import os
     import shutil
 
     import speech_recognition as sr
 
     wake_word = config.WAKE_WORD.lower()
-    segment_duration = 3  # seconds per listening segment
-    sample_rate = config.PORCUPINE_SAMPLE_RATE  # 16 000 Hz
-    sample_width = 2  # 16-bit
-    channels = 1
+    segment_duration = 3
+    sample_rate = config.PORCUPINE_SAMPLE_RATE
+    sample_width = 2
 
-    sox_path = shutil.which("sox")
-    if not sox_path:
-        raise FileNotFoundError(
-            "sox not found. In Termux run: pkg install sox pulseaudio"
+    use_termux_api = shutil.which("termux-microphone-record") is not None
+    if use_termux_api:
+        print('[Termux] Using termux-microphone-record (Termux:API) for mic.')
+    else:
+        print(
+            '[Termux] termux-microphone-record not found — using PulseAudio. '
+            'If the mic does not work, install Termux:API and pkg install termux-api'
         )
+    print(f'[Termux] Listening for wake word "{config.WAKE_WORD}" …')
 
     recognizer = sr.Recognizer()
-    print(f'[Termux] Listening for wake word "{config.WAKE_WORD}" …')
 
     while True:
         if stop_event is not None and stop_event.is_set():
             return False
 
-        # Record a short segment
-        try:
-            pulse_source = getattr(config, "PULSE_SOURCE", "default") or "default"
-            proc = subprocess.run(
-                [
-                    sox_path,
-                    "-t", "pulseaudio", pulse_source,
-                    "-t", "raw",
-                    "-r", str(sample_rate),
-                    "-b", "16",
-                    "-e", "signed-integer",
-                    "-L",
-                    "-c", str(channels),
-                    "-",
-                    "trim", "0", str(segment_duration),
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                timeout=segment_duration + 5,
-            )
-            raw_data = proc.stdout
-            if proc.returncode != 0:
-                print(f"[Termux] sox exited with code {proc.returncode}")
-                continue
-        except subprocess.TimeoutExpired:
-            print("[Termux] sox recording timed out")
-            continue
-        except FileNotFoundError:
-            print("[Termux] sox not found")
-            continue
-
+        raw_data, rate = _record_segment_termux(segment_duration, sample_rate)
         if not raw_data:
-            print("[Termux] sox returned no audio data")
             continue
 
-        # Wrap raw PCM in AudioData for SpeechRecognition
-        audio = sr.AudioData(raw_data, sample_rate, sample_width)
+        audio = sr.AudioData(raw_data, rate, sample_width)
 
         kwargs = {}
         if getattr(config, "SPEECH_LANGUAGE", ""):
@@ -286,8 +355,6 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         try:
             text = recognizer.recognize_google(audio, **kwargs)
         except sr.UnknownValueError:
-            # No speech in this segment — keep listening (no log spam)
-            continue
             continue
         except sr.RequestError as exc:
             print(f"[Termux] Speech API error: {exc}")
@@ -296,7 +363,6 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         if not text:
             continue
 
-        # Show what was heard so the user can diagnose issues
         print(f'[Termux] Heard: "{text}"')
 
         if _matches_wake_word(text, wake_word):

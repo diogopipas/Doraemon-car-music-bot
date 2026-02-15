@@ -25,20 +25,22 @@ Open Termux and run:
 
 ```bash
 pkg update && pkg upgrade
-pkg install python mpv ffmpeg sox pulseaudio git
+pkg install python mpv ffmpeg sox pulseaudio git termux-api
 ```
+
+**Microphone:** PulseAudio on Termux often only exposes the *speaker* (sink monitor), not the mic. For the **real microphone** the bot uses **termux-microphone-record** from the `termux-api` package. You must have the **Termux:API** app installed (from F-Droid) and grant it microphone permission. If you see "Listening for wake word" but it never responds, install Termux:API and `pkg install termux-api`, then run the bot again.
 
 ### 3. Start PulseAudio
 
-PulseAudio bridges Android's audio to command-line tools:
+PulseAudio is used for playback (mpv). Start it with:
 
 ```bash
-pulseaudio --start --load="module-sles-source" --load="module-sles-sink"
+pulseaudio --start
 ```
 
-> Add this to your `~/.bashrc` so it starts automatically:
+> Add to `~/.bashrc` to start automatically:
 > ```bash
-> echo 'pulseaudio --start --load="module-sles-source" --load="module-sles-sink" 2>/dev/null' >> ~/.bashrc
+> echo 'pulseaudio --start 2>/dev/null' >> ~/.bashrc
 > ```
 
 ### 4. Clone and install
