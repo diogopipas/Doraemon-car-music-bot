@@ -1,0 +1,13 @@
+# Core dependencies (all platforms)
+pvporcupine>=3.0.0
+SpeechRecognition>=3.10.0
+yt-dlp>=2024.1.0
+gTTS>=2.5.0
+python-dotenv>=1.0.0
+
+# Desktop (macOS/Linux/Windows) — microphone access via PvRecorder + PyAudio
+pvrecorder>=1.2.0
+PyAudio>=0.2.14
+
+# On Termux (Android): skip pvrecorder and PyAudio, install system packages instead.
+# See README.md for Termux setup instructions.
