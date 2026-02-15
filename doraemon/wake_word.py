@@ -220,18 +220,24 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
     """
     import os
     import shutil
-    import tempfile
     import time
+
+    debug = getattr(config, "TERMUX_DEBUG", False)
 
     # 1) Try Termux:API microphone (actual mic on Android)
     termux_rec = shutil.which("termux-microphone-record")
     ffmpeg_path = shutil.which("ffmpeg")
     if termux_rec and ffmpeg_path:
+        rec_path = getattr(config, "TERMUX_RECORD_PATH", "").strip()
+        if not rec_path:
+            cache_dir = Path(__file__).resolve().parent / "cache"
+            cache_dir.mkdir(exist_ok=True)
+            rec_path = str(cache_dir / "termux_rec.opus")
+        else:
+            rec_path = Path(rec_path).expanduser().resolve()
+            rec_path.parent.mkdir(parents=True, exist_ok=True)
+            rec_path = str(rec_path)
         try:
-            with tempfile.NamedTemporaryFile(
-                suffix=".opus", delete=False
-            ) as f:
-                rec_path = f.name
             subprocess.run(
                 [
                     termux_rec,
@@ -242,26 +248,36 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
                     "-c", "1",
                 ],
                 capture_output=True,
-                timeout=5,
+                timeout=10,
             )
-            time.sleep(duration_sec + 1)  # API records in background
-            try:
-                with open(rec_path, "rb") as f:
-                    data = f.read()
-            finally:
+            # API records in background; wait for recording + write
+            time.sleep(duration_sec + 2)
+            for _ in range(3):
                 try:
-                    os.unlink(rec_path)
-                except Exception:
-                    pass
+                    with open(rec_path, "rb") as f:
+                        data = f.read()
+                except FileNotFoundError:
+                    data = b""
+                if data and len(data) >= 100:
+                    break
+                time.sleep(1)
+            try:
+                os.unlink(rec_path)
+            except Exception:
+                pass
             if not data or len(data) < 100:
+                if debug:
+                    print(f"[Termux debug] termux-microphone-record: no data (file empty or missing)")
                 return None, None
-            # Convert opus → raw 16kHz mono 16-bit PCM
+            if debug:
+                print(f"[Termux debug] opus file: {len(data)} bytes")
+            # Convert opus → raw 16kHz mono 16-bit PCM (tell ffmpeg stdin is opus)
             proc = subprocess.run(
                 [
                     ffmpeg_path,
+                    "-f", "opus",
                     "-i", "-",
                     "-f", "s16le",
-                    "-acodec", "pcm_s16le",
                     "-ar", str(sample_rate),
                     "-ac", "1",
                     "-",
@@ -269,13 +285,19 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
                 input=data,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                timeout=5,
+                timeout=10,
             )
-            if proc.returncode == 0 and proc.stdout:
-                return proc.stdout, sample_rate
-        except Exception:
-            pass
-        return None, None
+            if proc.returncode != 0 or not proc.stdout:
+                if debug:
+                    print(f"[Termux debug] ffmpeg failed (code {proc.returncode})")
+                return None, None
+            if debug:
+                print(f"[Termux debug] PCM: {len(proc.stdout)} bytes")
+            return proc.stdout, sample_rate
+        except Exception as e:
+            if debug:
+                print(f"[Termux debug] termux record error: {e}")
+            return None, None
 
     # 2) Fallback: sox from PulseAudio (on many Termux setups only sink.monitor = speaker)
     sox_path = shutil.which("sox")
@@ -337,6 +359,8 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
     print(f'[Termux] Listening for wake word "{config.WAKE_WORD}" …')
 
     recognizer = sr.Recognizer()
+    debug = getattr(config, "TERMUX_DEBUG", False)
+    no_speech_count = 0
 
     while True:
         if stop_event is not None and stop_event.is_set():
@@ -355,6 +379,9 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         try:
             text = recognizer.recognize_google(audio, **kwargs)
         except sr.UnknownValueError:
+            no_speech_count += 1
+            if debug and no_speech_count % 5 == 1:
+                print("[Termux debug] Google: no speech in segment")
             continue
         except sr.RequestError as exc:
             print(f"[Termux] Speech API error: {exc}")

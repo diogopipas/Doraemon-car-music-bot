@@ -43,6 +43,14 @@ SPEECH_LANGUAGE: str = _get_str("SPEECH_LANGUAGE", "en-US")
 LISTEN_TIMEOUT: int = _get_int("LISTEN_TIMEOUT", 5)
 PHRASE_TIME_LIMIT: int = _get_int("PHRASE_TIME_LIMIT", 10)
 
+# Optional: set to 1 to print wake-word recording diagnostics on Termux
+TERMUX_DEBUG: bool = _get_str("TERMUX_DEBUG", "").lower() in ("1", "true", "yes")
+
+# Optional: path for termux-microphone-record output (default: doraemon/cache/termux_rec.opus).
+# If recording stays empty, try a path in shared storage, e.g. $HOME/storage/downloads/doraemon_rec.opus
+# (run termux-setup-storage first).
+TERMUX_RECORD_PATH: str = _get_str("TERMUX_RECORD_PATH")
+
 # Porcupine frame length (samples per frame at 16kHz)
 PORCUPINE_FRAME_LENGTH = 512
 PORCUPINE_SAMPLE_RATE = 16000
