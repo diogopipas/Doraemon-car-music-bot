@@ -38,9 +38,9 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
                     "-c", "1",
                 ],
                 capture_output=True,
-                timeout=5,
+                timeout=duration + 15,
             )
-            time.sleep(duration + 1)
+            time.sleep(2)
             try:
                 with open(rec_path, "rb") as f:
                     data = f.read()
@@ -54,9 +54,9 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
             proc = subprocess.run(
                 [
                     ffmpeg_path,
+                    "-f", "opus",
                     "-i", "-",
                     "-f", "s16le",
-                    "-acodec", "pcm_s16le",
                     "-ar", str(sample_rate),
                     "-ac", "1",
                     "-",
@@ -64,7 +64,7 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
                 input=data,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                timeout=10,
+                timeout=15,
             )
             if proc.returncode == 0 and proc.stdout:
                 return proc.stdout, sample_rate

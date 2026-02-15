@@ -238,6 +238,7 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
             rec_path.parent.mkdir(parents=True, exist_ok=True)
             rec_path = str(rec_path)
         try:
+            # On some devices termux-microphone-record blocks until recording finishes
             subprocess.run(
                 [
                     termux_rec,
@@ -248,10 +249,10 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
                     "-c", "1",
                 ],
                 capture_output=True,
-                timeout=10,
+                timeout=duration_sec + 15,
             )
-            # API records in background; wait for recording + write
-            time.sleep(duration_sec + 2)
+            # If the command returned immediately (API records in background), wait for file
+            time.sleep(2)
             for _ in range(3):
                 try:
                     with open(rec_path, "rb") as f:
