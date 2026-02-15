@@ -159,11 +159,27 @@ def _create_porcupine():
         )
 
     model_path = (config.WAKE_WORD_MODEL_PATH or "").strip()
-    if model_path and Path(model_path).expanduser().exists():
-        return _porcupine_mod.create(
-            access_key=access_key,
-            keyword_paths=[str(Path(model_path).expanduser().resolve())],
-        )
+    if model_path:
+        p = Path(model_path).expanduser()
+        if not p.is_absolute():
+            p = config.PROJECT_ROOT / p
+        p = p.resolve()
+        if p.exists():
+            try:
+                return _porcupine_mod.create(
+                    access_key=access_key,
+                    keyword_paths=[str(p)],
+                )
+            except _porcupine_mod.PorcupineInvalidArgumentError as e:
+                err_msg = str(e).lower()
+                if "different platform" in err_msg or "incorrect format" in err_msg:
+                    print(
+                        "[wake_word] Custom .ppn is for another platform (e.g. Android .ppn on macOS). "
+                        "Using built-in 'computer' keyword. For custom wake word on this machine, "
+                        "download the .ppn for your platform from https://console.picovoice.ai/"
+                    )
+                else:
+                    raise
     # Fallback to built-in keyword for testing without custom "Doraemon" model
     return _porcupine_mod.create(
         access_key=access_key,

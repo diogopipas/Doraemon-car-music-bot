@@ -6,8 +6,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load .env from project root (parent of doraemon package)
-_project_root = Path(__file__).resolve().parent.parent
-load_dotenv(_project_root / ".env")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 def _get_str(key: str, default: str = "") -> str:
@@ -25,7 +25,8 @@ def _get_int(key: str, default: int) -> int:
 PICOVOICE_ACCESS_KEY: str = _get_str("PICOVOICE_ACCESS_KEY")
 
 # Optional: path to custom wake word .ppn file (e.g. "Doraemon")
-# Used only on desktop (Porcupine). Ignored on Termux.
+# Use a path matching your platform (Android .ppn on Termux, macOS .ppn on Mac).
+# Relative paths are resolved from PROJECT_ROOT so the same .env works on both.
 WAKE_WORD_MODEL_PATH: str = _get_str("WAKE_WORD_MODEL_PATH")
 
 # Wake word phrase for Termux speech-recognition fallback (default: "doraemon")

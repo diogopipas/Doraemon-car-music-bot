@@ -7,6 +7,7 @@ cannot access microphone devices in Termux's environment.
 
 Both backends yield int16 PCM frames at 16kHz, one channel.
 """
+from __future__ import annotations
 
 import os
 import shutil

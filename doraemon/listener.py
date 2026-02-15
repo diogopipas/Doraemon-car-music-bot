@@ -1,4 +1,5 @@
 """Speech recognition for capturing song names after wake word."""
+from __future__ import annotations
 
 import io
 import os

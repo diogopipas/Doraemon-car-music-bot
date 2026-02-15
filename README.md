@@ -79,6 +79,15 @@ python main.py
 
 Connect your phone to your car via **Bluetooth** or **aux cable** for audio output.
 
+### Termux troubleshooting
+
+- **Wake word never triggers**
+  - If you see `[wake_word] Porcupine unavailable on Termux — using speech-recognition fallback`, the app uses **Google Speech Recognition** and listens for the word in `WAKE_WORD` (default: "doraemon"). Say that word clearly; set `SPEECH_LANGUAGE` in `.env` to your language (e.g. `pt-PT`) if recognition is poor.
+  - For the **real microphone** you need **Termux:API** installed and `pkg install termux-api`. Without it, only PulseAudio is used (often speaker-only, not mic). You should see `[Termux] Using termux-microphone-record` when the mic is available.
+  - Set `TERMUX_DEBUG=1` in `.env` to see recording diagnostics (opus size, "no speech", etc.).
+- **Use a relative path for the Android .ppn**  
+  In `.env`, set `WAKE_WORD_MODEL_PATH` to a path relative to the project root, e.g. `doraemon/Dora-e-mon_pt_android_v4_0_0/Dora-e-mon_pt_android_v4_0_0.ppn`, so it works no matter where you run the script from. The .ppn file must be the **Android** build from Picovoice Console.
+
 ---
 
 ## Desktop setup (macOS / Linux / Windows)
