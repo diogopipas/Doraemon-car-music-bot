@@ -25,7 +25,11 @@ def _get_int(key: str, default: int) -> int:
 PICOVOICE_ACCESS_KEY: str = _get_str("PICOVOICE_ACCESS_KEY")
 
 # Optional: path to custom wake word .ppn file (e.g. "Doraemon")
+# Used only on desktop (Porcupine). Ignored on Termux.
 WAKE_WORD_MODEL_PATH: str = _get_str("WAKE_WORD_MODEL_PATH")
+
+# Wake word phrase for Termux speech-recognition fallback (default: "doraemon")
+WAKE_WORD: str = _get_str("WAKE_WORD", "doraemon")
 
 # Optional: speech recognition timeouts (seconds)
 LISTEN_TIMEOUT: int = _get_int("LISTEN_TIMEOUT", 5)

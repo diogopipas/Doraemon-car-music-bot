@@ -13,10 +13,11 @@ from doraemon import feedback
 from doraemon import listener
 from doraemon import player
 from doraemon import wake_word
+from doraemon.audio import IS_TERMUX
 
 
 def main() -> None:
-    if not config.PICOVOICE_ACCESS_KEY:
+    if not IS_TERMUX and not config.PICOVOICE_ACCESS_KEY:
         print("Error: PICOVOICE_ACCESS_KEY is not set. Copy .env.example to .env and add your key.")
         print("Get a key at https://console.picovoice.ai/")
         sys.exit(1)

@@ -1,6 +1,6 @@
 # Termux (Android) dependencies
-# pvrecorder and PyAudio are NOT needed — sox handles microphone access
-pvporcupine>=3.0.0
+# pvporcupine, pvrecorder, and PyAudio are NOT needed on Termux.
+# Wake word detection uses sox + Google Speech Recognition instead.
 SpeechRecognition>=3.10.0
 yt-dlp>=2024.1.0
 gTTS>=2.5.0
