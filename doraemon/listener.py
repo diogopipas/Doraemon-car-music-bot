@@ -33,11 +33,12 @@ def _record_wav_termux(duration: int) -> sr.AudioData | None:
     byte_count = sample_rate * sample_width * channels * duration
     frame_count = sample_rate * duration
 
+    pulse_source = config.PULSE_SOURCE or "default"
     try:
         proc = subprocess.run(
             [
                 sox_path,
-                "-t", "pulseaudio", "default",
+                "-t", "pulseaudio", pulse_source,
                 "-t", "raw",
                 "-r", str(sample_rate),
                 "-b", "16",
@@ -95,8 +96,11 @@ def listen_for_song_name() -> str | None:
             except sr.WaitTimeoutError:
                 return None
 
+    kwargs = {}
+    if config.SPEECH_LANGUAGE:
+        kwargs["language"] = config.SPEECH_LANGUAGE
     try:
-        text = recognizer.recognize_google(audio)
+        text = recognizer.recognize_google(audio, **kwargs)
         return (text or "").strip() or None
     except sr.UnknownValueError:
         return None

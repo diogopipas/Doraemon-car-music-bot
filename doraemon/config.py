@@ -31,6 +31,14 @@ WAKE_WORD_MODEL_PATH: str = _get_str("WAKE_WORD_MODEL_PATH")
 # Wake word phrase for Termux speech-recognition fallback (default: "doraemon")
 WAKE_WORD: str = _get_str("WAKE_WORD", "doraemon")
 
+# Optional: PulseAudio source for mic (Termux). Use "default" or run
+# "pactl list sources short" and set to the source name (e.g. mic) if default fails.
+PULSE_SOURCE: str = _get_str("PULSE_SOURCE", "default")
+
+# Optional: speech recognition language (e.g. "en-US", "pt-PT"). Empty = auto.
+# Helps Google recognize words; set to your language if "no speech detected" often.
+SPEECH_LANGUAGE: str = _get_str("SPEECH_LANGUAGE", "en-US")
+
 # Optional: speech recognition timeouts (seconds)
 LISTEN_TIMEOUT: int = _get_int("LISTEN_TIMEOUT", 5)
 PHRASE_TIME_LIMIT: int = _get_int("PHRASE_TIME_LIMIT", 10)

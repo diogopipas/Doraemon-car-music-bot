@@ -243,10 +243,11 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
 
         # Record a short segment
         try:
+            pulse_source = getattr(config, "PULSE_SOURCE", "default") or "default"
             proc = subprocess.run(
                 [
                     sox_path,
-                    "-t", "pulseaudio", "default",
+                    "-t", "pulseaudio", pulse_source,
                     "-t", "raw",
                     "-r", str(sample_rate),
                     "-b", "16",
@@ -257,16 +258,13 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
                     "trim", "0", str(segment_duration),
                 ],
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
                 timeout=segment_duration + 5,
             )
             raw_data = proc.stdout
-            sox_stderr = proc.stderr.decode(errors="replace").strip()
             if proc.returncode != 0:
-                print(f"[Termux] sox exited with code {proc.returncode}: {sox_stderr}")
+                print(f"[Termux] sox exited with code {proc.returncode}")
                 continue
-            if sox_stderr:
-                print(f"[Termux] sox warning: {sox_stderr}")
         except subprocess.TimeoutExpired:
             print("[Termux] sox recording timed out")
             continue
@@ -278,17 +276,18 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
             print("[Termux] sox returned no audio data")
             continue
 
-        audio_bytes = len(raw_data)
-        audio_seconds = audio_bytes / (sample_rate * sample_width * channels)
-        print(f"[Termux] Recorded {audio_bytes} bytes ({audio_seconds:.1f}s)")
-
         # Wrap raw PCM in AudioData for SpeechRecognition
         audio = sr.AudioData(raw_data, sample_rate, sample_width)
 
+        kwargs = {}
+        if getattr(config, "SPEECH_LANGUAGE", ""):
+            kwargs["language"] = config.SPEECH_LANGUAGE
+
         try:
-            text = recognizer.recognize_google(audio)
+            text = recognizer.recognize_google(audio, **kwargs)
         except sr.UnknownValueError:
-            print("[Termux] (no speech detected)")
+            # No speech in this segment — keep listening (no log spam)
+            continue
             continue
         except sr.RequestError as exc:
             print(f"[Termux] Speech API error: {exc}")
