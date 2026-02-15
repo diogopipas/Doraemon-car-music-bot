@@ -41,6 +41,28 @@ _MOBILE_CPU_MAP = {
 }
 
 
+def _verify_native_library(pvporcupine_module):
+    """
+    Try to actually load the Porcupine native C library (.so/.dylib/.dll).
+
+    The Python package can import fine, but the shared library may fail to load
+    on platforms like Android/Termux where glibc is not available.
+
+    Returns the module if the library loads, or None.
+    """
+    try:
+        from ctypes import cdll
+        from pvporcupine._util import pv_library_path
+        cdll.LoadLibrary(pv_library_path())
+        return pvporcupine_module
+    except OSError as exc:
+        print(f"[wake_word] Porcupine native library failed to load: {exc}")
+        return None
+    except Exception as exc:
+        print(f"[wake_word] Porcupine library verification failed: {exc}")
+        return None
+
+
 def _try_import_porcupine():
     """
     Import pvporcupine, applying a CPU-detection patch for mobile ARM if the
@@ -51,7 +73,7 @@ def _try_import_porcupine():
     # --- 1. Try a plain import first ---
     try:
         import pvporcupine
-        return pvporcupine
+        return _verify_native_library(pvporcupine)
     except ImportError:
         # Package not installed at all
         return None
@@ -92,16 +114,19 @@ def _try_import_porcupine():
     try:
         subprocess.check_output = _patched_check_output
         import pvporcupine
-        return pvporcupine
     except Exception as exc:
-        print(f"[wake_word] Porcupine CPU patch applied but load still failed: {exc}")
-        # Clean up broken imports
+        print(f"[wake_word] Porcupine CPU patch applied but import still failed: {exc}")
         for key in list(sys.modules):
             if key.startswith("pvporcupine"):
                 del sys.modules[key]
         return None
     finally:
         subprocess.check_output = _real_check_output
+
+    # --- 5. Verify the native .so library can actually be loaded.
+    #         The Python import may succeed but the C library may fail
+    #         on Android due to missing glibc (libpthread.so.0 etc.) ---
+    return _verify_native_library(pvporcupine)
 
 
 # ---------------------------------------------------------------------------
