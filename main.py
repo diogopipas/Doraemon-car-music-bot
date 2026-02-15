@@ -17,7 +17,10 @@ from doraemon.audio import IS_TERMUX
 
 
 def main() -> None:
-    if not IS_TERMUX and not config.PICOVOICE_ACCESS_KEY:
+    # Picovoice key is required when Porcupine is the active wake-word backend.
+    # On Termux where Porcupine may be unavailable, the SR fallback doesn't need it.
+    porcupine_needed = not IS_TERMUX or wake_word._porcupine_mod is not None
+    if porcupine_needed and not config.PICOVOICE_ACCESS_KEY:
         print("Error: PICOVOICE_ACCESS_KEY is not set. Copy .env.example to .env and add your key.")
         print("Get a key at https://console.picovoice.ai/")
         sys.exit(1)
