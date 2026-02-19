@@ -23,27 +23,29 @@ def _normalise_phrase(s: str) -> str:
 # Normalized forms Google might use for "Doraemon"
 _WAKE_NORMALIZED_FORMS = frozenset({
     "doraemon",
-    "doramon",   # single m
-    "doraimon", # with i
+    "doramon",
+    "doraimon",
+    "doraimen",
 })
 
 
 def _matches_wake_word(text: str, wake_word: str) -> bool:
     """
     Check whether *text* is or contains "Doraemon" (or common mishearings).
-    Tolerates transcription variants and spelling (Doramon, Dora e mon, etc.).
+    Also accepts "dora" + "mon" with a few chars between (e.g. "dora e mon").
     """
     if not (text or "").strip():
         return False
     normalise = _normalise_phrase
     target = normalise(text)
-    # Exact match (user said only "Doraemon")
-    if target in _WAKE_NORMALIZED_FORMS:
-        return True
-    # Wake word appears inside what was said
+    # Exact or contained match
     for form in _WAKE_NORMALIZED_FORMS:
-        if form in target:
+        if form in target or target == form:
             return True
+    # Very lenient: "dora" followed by "mon" (e.g. "dora e mon", "doraímon")
+    import re
+    if re.search(r"dora.?mon|dora.?men", target):
+        return True
     return False
 
 
@@ -220,10 +222,11 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
             'If the mic does not work, install Termux:API and pkg install termux-api'
         )
     print('[Termux] Listening for wake word "Doraemon" …')
+    print('[Termux] Say "Doraemon" clearly. You will see a line every ~3 s: "No speech" or what was heard.\n')
 
     recognizer = sr.Recognizer()
-    debug = getattr(config, "TERMUX_DEBUG", False)
-    no_speech_count = 0
+    speech_lang = (getattr(config, "SPEECH_LANGUAGE", "") or "").strip()
+    no_audio_count = 0
 
     while True:
         if stop_event is not None and stop_event.is_set():
@@ -231,35 +234,34 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
 
         raw_data, rate = _record_segment_termux(segment_duration, SAMPLE_RATE)
         if not raw_data:
+            no_audio_count += 1
+            if no_audio_count <= 3 or no_audio_count % 5 == 0:
+                print("[Termux] No audio from mic. Check Termux:API mic permission and try again.")
             continue
 
         audio = sr.AudioData(raw_data, rate, sample_width)
 
+        # Try with language if set, else let Google auto-detect (can help for "Doraemon")
         kwargs = {}
-        if getattr(config, "SPEECH_LANGUAGE", ""):
-            kwargs["language"] = config.SPEECH_LANGUAGE
+        if speech_lang:
+            kwargs["language"] = speech_lang
 
         try:
             text = recognizer.recognize_google(audio, **kwargs)
         except sr.UnknownValueError:
-            no_speech_count += 1
-            if debug and no_speech_count % 5 == 1:
-                print(
-                    "[Termux debug] Google: no speech in segment. "
-                    "Say the wake word clearly in one go; set SPEECH_LANGUAGE in .env to your language (e.g. pt-PT)."
-                )
+            print("[Termux] No speech in segment. Say « Doraemon » now.")
             continue
         except sr.RequestError as exc:
             print(f"[Termux] Speech API error: {exc}")
             continue
 
         if not text:
+            print("[Termux] No speech in segment. Say « Doraemon » now.")
             continue
 
         if _matches_wake_word(text, wake_word_str):
             print(f'[Termux] Wake word detected: "{text}"')
             return True
-        # Always show what was heard so you can fix SPEECH_LANGUAGE or pronunciation
         print(f'[Termux] Heard (not wake word): "{text}"')
 
 
