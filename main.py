@@ -40,38 +40,38 @@ def main() -> None:
             detected = wake_word.wait_for_wake_word()
             if not detected:
                 continue
-            feedback.speak("Yes?", block=True)
-            # Short pause so user hears "Yes?" and can start speaking
+            feedback.speak_phrase("yes", block=True)
+            # Short pause so user hears the prompt and can start speaking
             time.sleep(0.6)
             phrase = listener.listen_for_song_name()
             if not phrase:
-                feedback.speak("Try again?", block=True)
+                feedback.speak_phrase("try_again", block=True)
                 phrase = listener.listen_for_song_name()
             if not phrase:
-                feedback.speak("Sorry, I didn't catch that.", block=True)
+                feedback.speak_phrase("sorry", block=True)
                 continue
             phrase_lower = phrase.strip().lower()
             if phrase_lower in ("stop", "stop the music", "stop music"):
                 player.stop_playback()
-                feedback.speak("Stopped.", block=True)
+                feedback.speak_phrase("stopped", block=True)
                 continue
             if phrase_lower in SLEEP_PHRASES:
                 player.stop_playback()
-                feedback.speak("Goodbye.", block=True)
+                feedback.speak_phrase("goodbye", block=True)
                 print("Goodbye.")
                 sys.exit(0)
             result = player.play_song(phrase)
             if result.success:
-                feedback.speak(f"Playing {result.title}.", block=True)
+                feedback.speak_phrase("playing", block=True, title=result.title)
             else:
-                feedback.speak(f"Could not find or play {phrase}.", block=True)
+                feedback.speak_phrase("not_found", block=True, phrase=phrase)
         except KeyboardInterrupt:
             print("\nBye!")
             player.stop_playback()
             break
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
-            feedback.speak("Something went wrong. Try again.", block=True)
+            feedback.speak_phrase("error", block=True)
 
 
 if __name__ == "__main__":

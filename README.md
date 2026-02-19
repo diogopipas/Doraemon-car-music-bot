@@ -73,6 +73,7 @@ cp .env.example .env
 Edit `.env`:
 - Set `PICOVOICE_ACCESS_KEY` to your key.
 - Set `WAKE_WORD_MODEL_PATH` to the `.ppn` file path (e.g. `doraemon/Dora-e-mon_pt_android_v4_0_0/Dora-e-mon_pt_android_v4_0_0.ppn`).
+- **Your language:** Set `SPEECH_LANGUAGE=pt-PT` (or your locale) so the wake phrase is recognized. Set `WAKE_PHRASES=ok música, ó música` to trigger with a phrase in your language instead of "Doraemon". Set `FEEDBACK_LANGUAGE=pt` so the bot says "Sim?", "Parado.", etc. in your language. Set `PHRASE_LANGUAGE=en-US` if you say song names in English.
 
 ### 7. Hands-free like "Hey Siri" (no taps)
 
@@ -141,7 +142,7 @@ With the bot running in the foreground, say **"Doraemon"** clearly. Watch the te
 - If you never see `Heard:` at all, the mic isn't delivering usable audio (back to step 2).
 - If you see `Heard: "doraemon"` (or similar) and the bot still doesn't say "Yes?", there may be a bug — check the rest of the log.
 - **Wake word only works right after start, then stops:** The bot now uses a unique temp file per recording and a short pause between recordings so the mic is released. Update to the latest code. If it still happens, try closing other apps using the mic and ensure Termux:API has microphone permission and isn’t battery-restricted.
-- **Songs not recognized after "Yes?":** Set `SPEECH_LANGUAGE` in `.env` to the language you speak (e.g. `pt-PT`, `es-ES`, `en-US`). Say the song name clearly right after "Yes?"; you have a few seconds before it stops listening.
+- **Songs not recognized after "Yes?":** Set `PHRASE_LANGUAGE=en-US` in `.env` if you say song names in English; set `SPEECH_LANGUAGE` to your language for the wake word. Say the song name clearly right after the prompt.
 
 **4. Battery / boot.**  
 If the bot runs when you start it manually but not after reboot: open **Termux:Boot** once (tap its icon), and in **Settings → Apps → Termux → Battery** set to **Unrestricted**. Then reboot and check step 1 again.
@@ -208,6 +209,9 @@ python main.py
 |----------|----------|-------------|
 | `PICOVOICE_ACCESS_KEY` | Yes | Access key from [Picovoice Console](https://console.picovoice.ai/). |
 | `WAKE_WORD_MODEL_PATH` | No | Path to custom `.ppn` wake word file. Must match your platform (Android for Termux, macOS for Mac, etc.). |
+| `WAKE_PHRASES` | No | Extra wake phrases in your language, comma-separated (e.g. `ok música, ó música`). Use when "Doraemon" is often misheard. |
+| `FEEDBACK_LANGUAGE` | No | Language for spoken feedback: "Yes?", "Stopped", etc. (e.g. `pt`, `en`, `es`). |
+| `PHRASE_LANGUAGE` | No | Language for recognizing the *song name* (e.g. `en-US`). Empty = use `SPEECH_LANGUAGE`. Set to English if you say song titles in English. |
 | `LISTEN_TIMEOUT` | No | Seconds to wait for speech after wake word (default: 5). |
 | `PHRASE_TIME_LIMIT` | No | Max length of spoken phrase in seconds (default: 10). |
 

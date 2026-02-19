@@ -178,8 +178,9 @@ def listen_for_song_name() -> str | None:
                 return None
 
     kwargs = {}
-    if config.SPEECH_LANGUAGE:
-        kwargs["language"] = config.SPEECH_LANGUAGE
+    phrase_lang = getattr(config, "PHRASE_LANGUAGE", None) or config.SPEECH_LANGUAGE
+    if phrase_lang:
+        kwargs["language"] = phrase_lang
     try:
         text = recognizer.recognize_google(audio, **kwargs)
         return (text or "").strip() or None

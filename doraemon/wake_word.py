@@ -214,18 +214,26 @@ def _wait_porcupine(*, stop_event=None) -> bool:
 # Speech-recognition fallback (Termux only)
 # ---------------------------------------------------------------------------
 
-def _matches_wake_word(text: str, wake_word: str) -> bool:
-    """
-    Check whether *text* contains the wake word, tolerating the many ways
-    speech recognition might transcribe "doraemon":
-      "Doraemon", "Dora Emon", "dora e mon", "Doremon", "Dora Amon", etc.
-
-    Strategy: strip all spaces/hyphens/punctuation from both strings and
-    do a substring check, so "dora e mon" → "doraemon" matches "doraemon".
-    """
+def _normalise_phrase(s: str) -> str:
+    """Strip spaces, hyphens, punctuation for fuzzy match."""
     import re
-    normalise = lambda s: re.sub(r"[\s\-'\".,!?]+", "", s.lower())
-    return normalise(wake_word) in normalise(text)
+    return re.sub(r"[\s\-'\".,!?]+", "", s.lower())
+
+
+def _matches_wake_word(text: str, wake_word: str, extra_phrases: list[str] | None = None) -> bool:
+    """
+    Check whether *text* contains the wake word or any extra phrase (e.g. "ok música").
+    Tolerates transcription variants by normalising spaces/punctuation.
+    """
+    normalise = _normalise_phrase
+    target = normalise(text)
+    phrases = [wake_word]
+    if extra_phrases:
+        phrases.extend(extra_phrases)
+    for p in phrases:
+        if p and normalise(p) in target:
+            return True
+    return False
 
 
 def _record_segment_termux(duration_sec: int, sample_rate: int):
@@ -404,7 +412,8 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
     import speech_recognition as sr
 
     wake_word = config.WAKE_WORD.lower()
-    segment_duration = 4  # longer window = more chance to catch full "Doraemon"
+    extra = [p.strip().lower() for p in getattr(config, "WAKE_PHRASES", "").split(",") if p.strip()]
+    segment_duration = 4  # longer window = more chance to catch full phrase
     sample_rate = config.PORCUPINE_SAMPLE_RATE
     sample_width = 2
 
@@ -416,7 +425,10 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
             '[Termux] termux-microphone-record not found — using PulseAudio. '
             'If the mic does not work, install Termux:API and pkg install termux-api'
         )
-    print(f'[Termux] Listening for wake word "{config.WAKE_WORD}" …')
+    if extra:
+        print(f'[Termux] Listening for wake phrase(s): "{config.WAKE_WORD}" or {extra} …')
+    else:
+        print(f'[Termux] Listening for wake word "{config.WAKE_WORD}" …')
 
     recognizer = sr.Recognizer()
     debug = getattr(config, "TERMUX_DEBUG", False)
@@ -453,7 +465,7 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         if not text:
             continue
 
-        if _matches_wake_word(text, wake_word):
+        if _matches_wake_word(text, wake_word, extra):
             print(f'[Termux] Wake word detected: "{text}"')
             return True
         if debug:
