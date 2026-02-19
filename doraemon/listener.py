@@ -54,35 +54,18 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
                 except Exception:
                     pass
             if data and len(data) >= 100:
-                proc = subprocess.run(
-                    [
-                        ffmpeg_path,
-                        "-nostdin",
-                        "-i", "-",
-                        "-f", "s16le",
-                        "-ar", str(sample_rate),
-                        "-ac", "1",
-                        "-",
-                    ],
-                    input=data,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                    timeout=15,
-                )
-                if proc.returncode != 0 or not proc.stdout:
-                    # Fallback: ffmpeg -i file (pipe often fails on Termux with code 234)
-                    with tempfile.NamedTemporaryFile(suffix=".opus", delete=False) as tmp:
-                        tmp.write(data)
-                        tmp_path = tmp.name
-                    try:
+                with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tmp:
+                    tmp.write(data)
+                    tmp_path = tmp.name
+                try:
+                    opusdec_path = shutil.which("opusdec")
+                    if opusdec_path:
                         proc = subprocess.run(
                             [
-                                ffmpeg_path,
-                                "-y",
-                                "-i", tmp_path,
-                                "-f", "s16le",
-                                "-ar", str(sample_rate),
-                                "-ac", "1",
+                                opusdec_path,
+                                "--rate", str(sample_rate),
+                                "--quiet",
+                                tmp_path,
                                 "-",
                             ],
                             stdout=subprocess.PIPE,
@@ -91,13 +74,27 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
                         )
                         if proc.returncode == 0 and proc.stdout:
                             return proc.stdout, sample_rate
-                    finally:
-                        try:
-                            os.unlink(tmp_path)
-                        except Exception:
-                            pass
-                elif proc.stdout:
-                    return proc.stdout, sample_rate
+                    proc = subprocess.run(
+                        [
+                            ffmpeg_path,
+                            "-y",
+                            "-i", tmp_path,
+                            "-f", "s16le",
+                            "-ar", str(sample_rate),
+                            "-ac", "1",
+                            "-",
+                        ],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL,
+                        timeout=15,
+                    )
+                    if proc.returncode == 0 and proc.stdout:
+                        return proc.stdout, sample_rate
+                finally:
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
         except subprocess.TimeoutExpired:
             pass
         except Exception:

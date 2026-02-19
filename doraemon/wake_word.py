@@ -291,36 +291,20 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
             if data and len(data) >= 100:
                 if debug:
                     print(f"[Termux debug] opus file: {len(data)} bytes")
-                # Try pipe first; on some Termux ffmpeg builds stdin fails (e.g. code 234)
-                proc = subprocess.run(
-                    [
-                        ffmpeg_path,
-                        "-nostdin",
-                        "-i", "-",
-                        "-f", "s16le",
-                        "-ar", str(sample_rate),
-                        "-ac", "1",
-                        "-",
-                    ],
-                    input=data,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=10,
-                )
-                if proc.returncode != 0 or not proc.stdout:
-                    # Fallback: write opus to temp file; ffmpeg -i file often works when pipe fails
-                    with tempfile.NamedTemporaryFile(suffix=".opus", delete=False) as tmp:
-                        tmp.write(data)
-                        tmp_path = tmp.name
-                    try:
+                # Write to temp file; Termux ffmpeg often fails (234) on opus from pipe,
+                # and sometimes from file. opusdec (opus-tools) is more reliable.
+                with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tmp:
+                    tmp.write(data)
+                    tmp_path = tmp.name
+                try:
+                    opusdec_path = shutil.which("opusdec")
+                    if opusdec_path:
                         proc = subprocess.run(
                             [
-                                ffmpeg_path,
-                                "-y",
-                                "-i", tmp_path,
-                                "-f", "s16le",
-                                "-ar", str(sample_rate),
-                                "-ac", "1",
+                                opusdec_path,
+                                "--rate", str(sample_rate),
+                                "--quiet",
+                                tmp_path,
                                 "-",
                             ],
                             stdout=subprocess.PIPE,
@@ -329,23 +313,37 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
                         )
                         if proc.returncode == 0 and proc.stdout:
                             if debug:
-                                print(f"[Termux debug] PCM: {len(proc.stdout)} bytes (via file)")
+                                print(f"[Termux debug] PCM: {len(proc.stdout)} bytes (opusdec)")
                             return proc.stdout, sample_rate
                         if debug and proc.stderr:
                             err = proc.stderr.decode("utf-8", errors="replace").strip()
-                            print(f"[Termux debug] ffmpeg file fallback failed: {err[:200]}")
-                    finally:
-                        try:
-                            os.unlink(tmp_path)
-                        except Exception:
-                            pass
-                else:
-                    if debug:
-                        print(f"[Termux debug] PCM: {len(proc.stdout)} bytes")
-                    return proc.stdout, sample_rate
-                if debug and proc.stderr:
-                    err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
-                    print(f"[Termux debug] ffmpeg failed (code {proc.returncode}): {err[:200]}")
+                            print(f"[Termux debug] opusdec failed: {err[:150]}")
+                    proc = subprocess.run(
+                        [
+                            ffmpeg_path,
+                            "-y",
+                            "-i", tmp_path,
+                            "-f", "s16le",
+                            "-ar", str(sample_rate),
+                            "-ac", "1",
+                            "-",
+                        ],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        timeout=10,
+                    )
+                    if proc.returncode == 0 and proc.stdout:
+                        if debug:
+                            print(f"[Termux debug] PCM: {len(proc.stdout)} bytes (ffmpeg)")
+                        return proc.stdout, sample_rate
+                    if debug and proc.stderr:
+                        err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+                        print(f"[Termux debug] ffmpeg failed: {err[:200]}")
+                finally:
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
             elif debug:
                 print(f"[Termux debug] termux-microphone-record: no data (file empty or missing)")
         except subprocess.TimeoutExpired:

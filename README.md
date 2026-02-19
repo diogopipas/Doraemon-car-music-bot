@@ -26,8 +26,10 @@ Open Termux and run:
 
 ```bash
 pkg update && pkg upgrade
-pkg install python mpv ffmpeg sox pulseaudio git termux-api
+pkg install python mpv ffmpeg sox pulseaudio git termux-api opus-tools
 ```
+
+**opus-tools** provides `opusdec`, which is used to convert the microphone’s Opus recording to PCM when ffmpeg fails (common on Termux with exit code 234).
 
 **Microphone:** PulseAudio on Termux often only exposes the *speaker* (sink monitor), not the mic. For the **real microphone** the bot uses **termux-microphone-record** from the `termux-api` package. You must have the **Termux:API** app installed (from F-Droid) and grant it microphone permission. If you see "Listening for wake word" but it never responds, install Termux:API and `pkg install termux-api`, then run the bot again.
 
@@ -130,7 +132,8 @@ With `python main.py` running in the foreground, you should see either:
 - `[Termux] Using termux-microphone-record (Termux:API) for mic.` → good, real mic.
 - `termux-microphone-record not found — using PulseAudio` → mic may be speaker-only (no real mic).
 
-If you don't have the real mic: install the **Termux:API** app from F-Droid, grant it **microphone** permission, and run `pkg install termux-api` in Termux. Then restart the bot. You should then see "Using termux-microphone-record".
+If you don't have the real mic: install the **Termux:API** app from F-Droid, grant it **microphone** permission, and run `pkg install termux-api` in Termux. Then restart the bot. You should then see "Using termux-microphone-record".  
+If you see **"ffmpeg failed (code 234)"** in the log but opus file size is shown: install **opus-tools** so the bot can use `opusdec` to decode Opus: run `pkg install opus-tools`, then restart the bot.
 
 **3. Is the wake word being heard?**  
 With the bot running in the foreground, say **"Doraemon"** clearly. Watch the terminal:
