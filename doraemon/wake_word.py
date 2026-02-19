@@ -241,8 +241,11 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
     debug = getattr(config, "TERMUX_DEBUG", False)
 
     # 1) Try Termux:API microphone (actual mic on Android)
+    # -l = length in seconds (letter L; 0 = unlimited). Use separate arg so it's never "-1".
+    _limit_opt = "-l"
     termux_rec = shutil.which("termux-microphone-record")
     ffmpeg_path = shutil.which("ffmpeg")
+    termux_failed = False
     if termux_rec and ffmpeg_path:
         rec_path = getattr(config, "TERMUX_RECORD_PATH", "").strip()
         if not rec_path:
@@ -254,27 +257,29 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
             rec_path.parent.mkdir(parents=True, exist_ok=True)
             rec_path = str(rec_path)
         try:
-            # On some devices termux-microphone-record blocks until recording finishes
+            # termux-microphone-record blocks until recording finishes (or timeout)
             subprocess.run(
                 [
                     termux_rec,
-                    "-l", str(duration_sec),
+                    _limit_opt,
+                    str(duration_sec),
                     "-f", rec_path,
                     "-e", "opus",
                     "-r", "16000",
                     "-c", "1",
                 ],
                 capture_output=True,
-                timeout=duration_sec + 15,
+                timeout=duration_sec + 8,
             )
             # If the command returned immediately (API records in background), wait for file
             time.sleep(2)
+            data = b""
             for _ in range(3):
                 try:
                     with open(rec_path, "rb") as f:
                         data = f.read()
                 except FileNotFoundError:
-                    data = b""
+                    pass
                 if data and len(data) >= 100:
                     break
                 time.sleep(1)
@@ -282,39 +287,46 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
                 os.unlink(rec_path)
             except Exception:
                 pass
-            if not data or len(data) < 100:
+            if data and len(data) >= 100:
                 if debug:
-                    print(f"[Termux debug] termux-microphone-record: no data (file empty or missing)")
-                return None, None
-            if debug:
-                print(f"[Termux debug] opus file: {len(data)} bytes")
-            # Convert opus → raw 16kHz mono 16-bit PCM (tell ffmpeg stdin is opus)
-            proc = subprocess.run(
-                [
-                    ffmpeg_path,
-                    "-f", "opus",
-                    "-i", "-",
-                    "-f", "s16le",
-                    "-ar", str(sample_rate),
-                    "-ac", "1",
-                    "-",
-                ],
-                input=data,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                timeout=10,
-            )
-            if proc.returncode != 0 or not proc.stdout:
+                    print(f"[Termux debug] opus file: {len(data)} bytes")
+                proc = subprocess.run(
+                    [
+                        ffmpeg_path,
+                        "-f", "opus",
+                        "-i", "-",
+                        "-f", "s16le",
+                        "-ar", str(sample_rate),
+                        "-ac", "1",
+                        "-",
+                    ],
+                    input=data,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                )
+                if proc.returncode == 0 and proc.stdout:
+                    if debug:
+                        print(f"[Termux debug] PCM: {len(proc.stdout)} bytes")
+                    return proc.stdout, sample_rate
                 if debug:
                     print(f"[Termux debug] ffmpeg failed (code {proc.returncode})")
-                return None, None
+            elif debug:
+                print(f"[Termux debug] termux-microphone-record: no data (file empty or missing)")
+        except subprocess.TimeoutExpired:
+            termux_failed = True
+            if not getattr(_record_segment_termux, "_timeout_warned", False):
+                _record_segment_termux._timeout_warned = True
+                print(
+                    "[Termux] termux-microphone-record timed out; using PulseAudio (sox) for mic. "
+                    "If you need the real mic, grant microphone permission to Termux:API and try again."
+                )
             if debug:
-                print(f"[Termux debug] PCM: {len(proc.stdout)} bytes")
-            return proc.stdout, sample_rate
+                print("[Termux debug] trying PulseAudio (sox).")
         except Exception as e:
+            termux_failed = True
             if debug:
                 print(f"[Termux debug] termux record error: {e}")
-            return None, None
 
     # 2) Fallback: sox from PulseAudio (on many Termux setups only sink.monitor = speaker)
     sox_path = shutil.which("sox")

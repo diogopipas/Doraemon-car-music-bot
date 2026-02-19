@@ -14,10 +14,11 @@ Doraemon is a personal AI-powered voice recognition bot that plays songs in your
 
 This is the primary target platform for in-car use.
 
-### 1. Install Termux
+### 1. Install Termux and add-ons
 
 - Install **[Termux](https://f-droid.org/packages/com.termux/)** from F-Droid (not the Play Store version).
 - Install **[Termux:API](https://f-droid.org/packages/com.termux.api/)** from F-Droid (needed for microphone permissions).
+- Optional: **[Termux:Widget](https://f-droid.org/packages/com.termux.widget/)** for manual start/stop shortcuts; **[Termux:Boot](https://f-droid.org/packages/com.termux.boot/)** is used for hands-free auto-start (see step 7).
 
 ### 2. Install system packages
 
@@ -71,24 +72,39 @@ Edit `.env`:
 - Set `PICOVOICE_ACCESS_KEY` to your key.
 - Set `WAKE_WORD_MODEL_PATH` to the `.ppn` file path (e.g. `doraemon/Dora-e-mon_pt_android_v4_0_0/Dora-e-mon_pt_android_v4_0_0.ppn`).
 
-### 7. Run
+### 7. Hands-free like "Hey Siri" (no taps)
 
-```bash
-python main.py
-```
+No tapping the screen. Doraemon starts when the phone boots and listens for the wake word. You turn it off by voice.
 
-Connect your phone to your car via **Bluetooth** or **aux cable** for audio output.
+**One-time setup — auto-start on boot:**
 
-### Termux troubleshooting
+1. Install [Termux:Boot](https://f-droid.org/packages/com.termux.boot/) from F-Droid (same source as Termux).
+2. In Termux, run:
+   ```bash
+   mkdir -p ~/.termux/boot
+   cp ~/Doraemon-car-music-bot/scripts/termux-boot-doraemon.sh ~/.termux/boot/
+   chmod +x ~/.termux/boot/termux-boot-doraemon.sh
+   ```
+3. Open **Termux:Boot** once (tap its icon) so Android allows it to run at boot.
+4. In Android **Settings → Apps → Termux → Battery**, set to *Unrestricted* (or disable battery optimization) so the bot isn’t killed in the background.
 
-- **Wake word never triggers**
-  - If you see `[wake_word] Porcupine unavailable on Termux — using speech-recognition fallback`, the app uses **Google Speech Recognition** and listens for the word in `WAKE_WORD` (default: "doraemon"). Say that word clearly; set `SPEECH_LANGUAGE` in `.env` to your language (e.g. `pt-PT`) if recognition is poor.
-  - For the **real microphone** you need **Termux:API** installed and `pkg install termux-api`. Without it, only PulseAudio is used (often speaker-only, not mic). You should see `[Termux] Using termux-microphone-record` when the mic is available.
-  - Set `TERMUX_DEBUG=1` in `.env` to see recording diagnostics (opus size, "no speech", etc.).
-- **Use a relative path for the Android .ppn**  
-  In `.env`, set `WAKE_WORD_MODEL_PATH` to a path relative to the project root, e.g. `doraemon/Dora-e-mon_pt_android_v4_0_0/Dora-e-mon_pt_android_v4_0_0.ppn`, so it works no matter where you run the script from. The .ppn file must be the **Android** build from Picovoice Console.
+After that, every time the phone boots, Doraemon starts and listens for the wake word. No opening Termux, no widgets, no taps.
 
----
+**Daily use (fully voice):**
+
+- **Use it:** Say **"Doraemon"** → it says "Yes?" → say a song name. Connect the phone to your car via **Bluetooth** or **aux** for audio.
+- **Stop the music:** Say **"Doraemon"** → **"stop"**.
+- **Turn off the bot:** Say **"Doraemon"** → **"go to sleep"** (or "goodbye", "stop listening"). It says "Goodbye." and exits. To have it listening again, reboot the phone or start it again (see below).
+
+**Optional — start only when you connect to the car:**  
+If you don’t want Doraemon running 24/7, use [Tasker](https://play.google.com/store/apps/details?id=net.dinglisch.android.taskerm) (or similar) plus the **Termux Plugin** for Tasker: create a profile that runs when your **car’s Bluetooth** connects, and run the script `~/Doraemon-car-music-bot/scripts/termux-start-doraemon.sh`. Then the bot only starts when you’re in the car. You still turn it off by voice: **"Doraemon"** → **"go to sleep"**.
+
+**Optional — manual start/stop (widgets):**  
+If you prefer a shortcut sometimes, you can use [Termux:Widget](https://f-droid.org/packages/com.termux.widget/) and the scripts in `scripts/` (e.g. copy to `~/.shortcuts/` and add as widgets). Not required for hands-free use.
+
+**Test from terminal:**  
+Run `python main.py` once to verify setup; say "go to sleep" to exit. For normal use, rely on boot (or Tasker) and voice only.
+
 
 ## Desktop setup (macOS / Linux / Windows)
 
@@ -133,12 +149,16 @@ python main.py
 
 ## Usage
 
-1. Run `python main.py`.
+1. Run `python main.py` (or let it auto-start on boot on Android).
 2. Say the wake word: **"Doraemon"** (or **"computer"** if no custom model is set).
-3. When you hear "Yes?", say a song name (e.g. "Bohemian Rhapsody by Queen").
+3. When you hear "Yes?", say what you want to hear. You can use natural phrasing:
+   - Just the song: **"Bohemian Rhapsody"**
+   - Song and artist: **"Bohemian Rhapsody by Queen"**
+   - Full sentence: **"Play Bohemian Rhapsody"**, **"I want you to play this song: X by Y"** — the bot strips the extra words and searches for the song/artist.
 4. The bot searches YouTube and streams audio. It says "Playing [title]."
-5. To stop: say the wake word, then **"stop"**.
-6. Press **Ctrl+C** to quit.
+5. To stop playback: say the wake word, then **"stop"**.
+6. To turn off the bot (hands-free): say the wake word, then **"go to sleep"** (or "goodbye", "stop listening"). It says "Goodbye." and exits.
+7. Press **Ctrl+C** to quit (when running in a terminal).
 
 ## Configuration (.env)
 
@@ -156,6 +176,7 @@ Doraemon-car-music-bot/
   main.py                   # Entry point
   requirements.txt          # Desktop dependencies
   requirements-termux.txt   # Termux (Android) dependencies
+  scripts/                   # Termux boot script (hands-free) and optional widget scripts
   doraemon/
     config.py               # Environment and settings
     audio.py                # Platform-aware microphone (PvRecorder or sox)

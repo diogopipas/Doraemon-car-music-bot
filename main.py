@@ -3,7 +3,7 @@
 Doraemon voice-activated music bot.
 
 Say the wake word ("Doraemon" or "computer" if no custom model), then say a song name
-to play it from YouTube. Say "stop" to stop playback.
+to play it from YouTube. Say "stop" to stop playback. Say "go to sleep" to turn off (hands-free).
 """
 
 import sys
@@ -14,6 +14,12 @@ from doraemon import listener
 from doraemon import player
 from doraemon import wake_word
 from doraemon.audio import IS_TERMUX
+
+# After wake word: saying any of these exits the bot (hands-free "turn off").
+SLEEP_PHRASES = frozenset({
+    "go to sleep", "stop listening", "goodbye", "sleep",
+    "good night", "turn off", "exit", "quit",
+})
 
 
 def main() -> None:
@@ -26,7 +32,7 @@ def main() -> None:
         sys.exit(1)
 
     print("Doraemon is listening. Say the wake word, then say a song name.")
-    print("Say 'stop' after the wake word to stop playback. Press Ctrl+C to quit.\n")
+    print("Say 'stop' to stop playback. Say 'go to sleep' to turn off (no taps).\n")
 
     while True:
         try:
@@ -43,6 +49,11 @@ def main() -> None:
                 player.stop_playback()
                 feedback.speak("Stopped.", block=True)
                 continue
+            if phrase_lower in SLEEP_PHRASES:
+                player.stop_playback()
+                feedback.speak("Goodbye.", block=True)
+                print("Goodbye.")
+                sys.exit(0)
             result = player.play_song(phrase)
             if result.success:
                 feedback.speak(f"Playing {result.title}.", block=True)

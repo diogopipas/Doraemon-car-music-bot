@@ -1,6 +1,7 @@
 """YouTube search and audio playback via yt-dlp and mpv."""
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from typing import NamedTuple
@@ -9,6 +10,21 @@ import yt_dlp
 
 # Track current playback so it can be stopped when a new song is requested
 _current_process: subprocess.Popen | None = None
+
+# Phrases to strip from the start of a voice command so the search query is just song/artist.
+# User can say "play X", "I want you to play this song: X by Y", etc.
+_SEARCH_PREFIXES = (
+    r"^(?:play\s+)+",
+    r"^i want (?:you to )?play\s+",
+    r"^i want to hear\s+",
+    r"^can you play\s+",
+    r"^could you play\s+",
+    r"^please play\s+",
+    r"^play (?:the )?song\s*:?\s*",
+    r"^play (?:the )?track\s*:?\s*",
+    r"^this song\s*:?\s*",
+    r"^the song\s*:?\s*",
+)
 
 
 class PlayResult(NamedTuple):
@@ -25,6 +41,14 @@ def _find_mpv() -> str:
             "mpv not found. Install it: brew install mpv (macOS) or apt install mpv (Linux)."
         )
     return path
+
+
+def _normalize_search_query(raw: str) -> str:
+    """Strip common leading phrases so 'play X' or 'I want you to play X by Y' becomes 'X' or 'X by Y'."""
+    s = (raw or "").strip()
+    for pat in _SEARCH_PREFIXES:
+        s = re.sub(pat, "", s, flags=re.IGNORECASE)
+    return s.strip()
 
 
 def stop_playback() -> None:
@@ -50,7 +74,7 @@ def play_song(query: str) -> PlayResult:
     global _current_process
     stop_playback()
 
-    query = (query or "").strip()
+    query = _normalize_search_query(query or "")
     if not query:
         return PlayResult(title="", success=False)
 

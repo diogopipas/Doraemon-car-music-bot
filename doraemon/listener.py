@@ -22,7 +22,8 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
     available; otherwise sox + PulseAudio (often only speaker monitor).
     Returns (raw_pcm_bytes, sample_rate) or (None, None).
     """
-    sample_width = 2
+    # -l = length in seconds (letter L). Separate arg to avoid being read as "-1".
+    _limit_opt = "-l"
     termux_rec = shutil.which("termux-microphone-record")
     ffmpeg_path = shutil.which("ffmpeg")
     if termux_rec and ffmpeg_path:
@@ -32,16 +33,18 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
             subprocess.run(
                 [
                     termux_rec,
-                    "-l", str(duration),
+                    _limit_opt,
+                    str(duration),
                     "-f", rec_path,
                     "-e", "opus",
                     "-r", "16000",
                     "-c", "1",
                 ],
                 capture_output=True,
-                timeout=duration + 15,
+                timeout=duration + 8,
             )
             time.sleep(2)
+            data = b""
             try:
                 with open(rec_path, "rb") as f:
                     data = f.read()
@@ -50,28 +53,28 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
                     os.unlink(rec_path)
                 except Exception:
                     pass
-            if not data or len(data) < 100:
-                return None, None
-            proc = subprocess.run(
-                [
-                    ffmpeg_path,
-                    "-f", "opus",
-                    "-i", "-",
-                    "-f", "s16le",
-                    "-ar", str(sample_rate),
-                    "-ac", "1",
-                    "-",
-                ],
-                input=data,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                timeout=15,
-            )
-            if proc.returncode == 0 and proc.stdout:
-                return proc.stdout, sample_rate
+            if data and len(data) >= 100:
+                proc = subprocess.run(
+                    [
+                        ffmpeg_path,
+                        "-f", "opus",
+                        "-i", "-",
+                        "-f", "s16le",
+                        "-ar", str(sample_rate),
+                        "-ac", "1",
+                        "-",
+                    ],
+                    input=data,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    timeout=15,
+                )
+                if proc.returncode == 0 and proc.stdout:
+                    return proc.stdout, sample_rate
+        except subprocess.TimeoutExpired:
+            pass
         except Exception:
             pass
-        return None, None
 
     sox_path = shutil.which("sox")
     if not sox_path:
