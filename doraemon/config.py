@@ -22,15 +22,7 @@ def _get_int(key: str, default: int) -> int:
         return default
 
 
-# Required
-PICOVOICE_ACCESS_KEY: str = _get_str("PICOVOICE_ACCESS_KEY")
-
-# Required on desktop when using Porcupine: path to Doraemon wake word .ppn file.
-# Use a path matching your platform (Android .ppn on Termux, macOS .ppn on Mac).
-# Relative paths are resolved from PROJECT_ROOT. Train "Doraemon" at https://console.picovoice.ai/
-WAKE_WORD_MODEL_PATH: str = _get_str("WAKE_WORD_MODEL_PATH")
-
-# Wake word for Termux speech-recognition fallback. Only "Doraemon" triggers the bot (no alternatives).
+# Wake word: only "Doraemon" triggers the bot. Recognized via Google Speech Recognition.
 WAKE_WORD: str = _get_str("WAKE_WORD", "doraemon")
 
 # Language for TTS feedback. "pt" = Doraemon persona (Portuguese phrases, Spanish accent). E.g. "pt", "en".
@@ -60,7 +52,3 @@ TERMUX_DEBUG: bool = _get_str("TERMUX_DEBUG", "").lower() in ("1", "true", "yes"
 # If recording stays empty, try a path in shared storage, e.g. $HOME/storage/downloads/doraemon_rec.opus
 # (run termux-setup-storage first).
 TERMUX_RECORD_PATH: str = _get_str("TERMUX_RECORD_PATH")
-
-# Porcupine frame length (samples per frame at 16kHz)
-PORCUPINE_FRAME_LENGTH = 512
-PORCUPINE_SAMPLE_RATE = 16000

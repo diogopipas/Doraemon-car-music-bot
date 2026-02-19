@@ -1,219 +1,18 @@
 """
-Wake word detection.
+Wake word detection (Android/Termux only).
 
-On desktop (macOS/Linux/Windows): uses Picovoice Porcupine for efficient,
-always-on wake word detection with low latency.
-
-On Termux (Android): attempts to use Porcupine by patching the CPU detection
-for mobile ARM cores (Cortex-A55, A73, A75, A77, A78, etc.) that are binary-
-compatible with Raspberry Pi CPUs but not recognised by the Python SDK.
-If Porcupine still cannot load (e.g. the native .so is incompatible with
-Android's Bionic libc), falls back to sox + Google Speech Recognition.
+Uses termux-microphone-record (or sox + PulseAudio) and Google Speech Recognition
+to detect "Doraemon" only. No Picovoice — it does not work on Termux.
 """
 
 import os
-import platform
+import shutil
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
 from . import config
-from .audio import IS_TERMUX
 
-
-# ---------------------------------------------------------------------------
-# Mobile ARM → Raspberry Pi CPU-part mapping (hex identifiers from cpuinfo)
-# ---------------------------------------------------------------------------
-# pvporcupine only recognises a handful of CPU parts (Pi Zero, Pi 3/4/5).
-# Mobile SoCs use different cores that are architecturally compatible.
-_MOBILE_CPU_MAP = {
-    "0xd04": "0xd03",  # Cortex-A35  → A53  (ARMv8-A little)
-    "0xd05": "0xd03",  # Cortex-A55  → A53  (ARMv8.2-A little)
-    "0xd09": "0xd08",  # Cortex-A73  → A72  (ARMv8-A big)
-    "0xd0a": "0xd08",  # Cortex-A75  → A72  (ARMv8.2-A big)
-    "0xd0d": "0xd0b",  # Cortex-A77  → A76  (ARMv8.2-A big)
-    "0xd41": "0xd0b",  # Cortex-A78  → A76
-    "0xd44": "0xd0b",  # Cortex-X1   → A76
-    "0xd46": "0xd0b",  # Cortex-A510 → A76
-    "0xd47": "0xd0b",  # Cortex-A710 → A76
-    "0xd48": "0xd0b",  # Cortex-X2   → A76
-    "0xd4d": "0xd0b",  # Cortex-A715 → A76
-    "0xd4e": "0xd0b",  # Cortex-X3   → A76
-}
-
-
-def _verify_native_library(pvporcupine_module):
-    """
-    Try to actually load the Porcupine native C library (.so/.dylib/.dll).
-
-    The Python package can import fine, but the shared library may fail to load
-    on platforms like Android/Termux where glibc is not available.
-
-    Returns the module if the library loads, or None.
-    """
-    try:
-        from ctypes import cdll
-        from pvporcupine._util import pv_library_path
-        cdll.LoadLibrary(pv_library_path())
-        return pvporcupine_module
-    except OSError as exc:
-        print(f"[wake_word] Porcupine native library failed to load: {exc}")
-        return None
-    except Exception as exc:
-        print(f"[wake_word] Porcupine library verification failed: {exc}")
-        return None
-
-
-def _try_import_porcupine():
-    """
-    Import pvporcupine, applying a CPU-detection patch for mobile ARM if the
-    normal import fails with ``NotImplementedError("Unsupported CPU …")``.
-
-    Returns the pvporcupine module on success, or *None* if it cannot be loaded.
-    """
-    # --- 1. Try a plain import first ---
-    try:
-        import pvporcupine
-        return _verify_native_library(pvporcupine)
-    except ImportError:
-        # Package not installed at all
-        return None
-    except NotImplementedError:
-        pass  # Unsupported CPU — try patching below
-
-    # --- 2. Identify the CPU part from /proc/cpuinfo ---
-    try:
-        cpu_info_raw = subprocess.check_output(["cat", "/proc/cpuinfo"]).decode()
-        cpu_parts = [l for l in cpu_info_raw.split("\n") if "CPU part" in l]
-        actual_part = cpu_parts[0].split()[-1].lower() if cpu_parts else ""
-    except Exception:
-        return None
-
-    if actual_part not in _MOBILE_CPU_MAP:
-        return None
-    replacement_part = _MOBILE_CPU_MAP[actual_part]
-
-    # --- 3. Remove broken partial imports from the first attempt ---
-    for key in list(sys.modules):
-        if key.startswith("pvporcupine"):
-            del sys.modules[key]
-
-    # --- 4. Monkey-patch subprocess.check_output so pvporcupine sees a
-    #         recognised CPU part when it reads /proc/cpuinfo at import time ---
-    _real_check_output = subprocess.check_output
-
-    def _patched_check_output(cmd, *args, **kwargs):
-        result = _real_check_output(cmd, *args, **kwargs)
-        if isinstance(cmd, list) and cmd == ["cat", "/proc/cpuinfo"]:
-            if isinstance(result, bytes):
-                return result.replace(
-                    actual_part.encode(), replacement_part.encode()
-                )
-            return result.replace(actual_part, replacement_part)
-        return result
-
-    try:
-        subprocess.check_output = _patched_check_output
-        import pvporcupine
-    except Exception as exc:
-        print(f"[wake_word] Porcupine CPU patch applied but import still failed: {exc}")
-        for key in list(sys.modules):
-            if key.startswith("pvporcupine"):
-                del sys.modules[key]
-        return None
-    finally:
-        subprocess.check_output = _real_check_output
-
-    # --- 5. Verify the native .so library can actually be loaded.
-    #         The Python import may succeed but the C library may fail
-    #         on Android due to missing glibc (libpthread.so.0 etc.) ---
-    return _verify_native_library(pvporcupine)
-
-
-# ---------------------------------------------------------------------------
-# Resolve which backend to use at import time
-# ---------------------------------------------------------------------------
-if IS_TERMUX:
-    _porcupine_mod = _try_import_porcupine()
-    if _porcupine_mod is not None:
-        print("[wake_word] Porcupine loaded successfully on Termux!")
-    else:
-        print(
-            "[wake_word] Porcupine unavailable on Termux — "
-            "using speech-recognition fallback."
-        )
-else:
-    # Desktop: import normally — a failure here is a real error.
-    import pvporcupine as _porcupine_mod  # noqa: F811
-
-
-# ---------------------------------------------------------------------------
-# Porcupine backend
-# ---------------------------------------------------------------------------
-
-def _create_porcupine():
-    """Create Porcupine instance with custom Doraemon .ppn. No fallback; .ppn is required."""
-    access_key = config.PICOVOICE_ACCESS_KEY
-    if not access_key:
-        raise ValueError(
-            "PICOVOICE_ACCESS_KEY is required. Set it in .env (see .env.example)."
-        )
-
-    model_path = (config.WAKE_WORD_MODEL_PATH or "").strip()
-    if not model_path:
-        raise ValueError(
-            "Doraemon wake word requires a custom .ppn. Set WAKE_WORD_MODEL_PATH in .env. "
-            "Train 'Doraemon' at https://console.picovoice.ai/ and download the .ppn for your platform."
-        )
-    p = Path(model_path).expanduser()
-    if not p.is_absolute():
-        p = config.PROJECT_ROOT / p
-    p = p.resolve()
-    if not p.exists():
-        raise ValueError(
-            f"Doraemon wake word .ppn not found: {p}. "
-            "Set WAKE_WORD_MODEL_PATH in .env to your Doraemon .ppn file."
-        )
-    try:
-        return _porcupine_mod.create(
-            access_key=access_key,
-            keyword_paths=[str(p)],
-        )
-    except _porcupine_mod.PorcupineInvalidArgumentError as e:
-        err_msg = str(e).lower()
-        if "different platform" in err_msg or "incorrect format" in err_msg:
-            raise ValueError(
-                "Your .ppn is for another platform (e.g. Android .ppn on macOS). "
-                "Download the Doraemon .ppn for this platform from https://console.picovoice.ai/"
-            ) from e
-        raise
-
-
-def _wait_porcupine(*, stop_event=None) -> bool:
-    """Use Porcupine for wake word detection (works on desktop and patched Termux)."""
-    from .audio import AudioRecorder
-
-    porcupine = _create_porcupine()
-    recorder = AudioRecorder(frame_length=porcupine.frame_length)
-
-    try:
-        recorder.start()
-        while True:
-            if stop_event is not None and stop_event.is_set():
-                return False
-            frame = recorder.read()
-            keyword_index = porcupine.process(frame)
-            if keyword_index >= 0:
-                return True
-    finally:
-        recorder.delete()
-        porcupine.delete()
-
-
-# ---------------------------------------------------------------------------
-# Speech-recognition fallback (Termux only)
-# ---------------------------------------------------------------------------
 
 def _normalise_phrase(s: str) -> str:
     """Strip spaces, hyphens, punctuation for fuzzy match."""
@@ -233,6 +32,10 @@ def _matches_wake_word(text: str, wake_word: str) -> bool:
     return normalise(wake_word) in target
 
 
+# Sample rate for Google Speech Recognition (16 kHz is standard)
+SAMPLE_RATE = 16000
+
+
 def _record_segment_termux(duration_sec: int, sample_rate: int):
     """
     Record a short segment on Termux. Prefer termux-microphone-record (real mic)
@@ -241,24 +44,17 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
 
     Returns (raw_pcm_bytes, sample_rate) or (None, None) on failure.
     """
-    import shutil
     import time
 
     debug = getattr(config, "TERMUX_DEBUG", False)
 
     # 1) Try Termux:API microphone (actual mic on Android)
-    # Use a unique temp path per recording so reusing the same path doesn't break after a few runs.
-    # -l = length in seconds (letter L; 0 = unlimited). Use separate arg so it's never "-1".
     _limit_opt = "-l"
     termux_rec = shutil.which("termux-microphone-record")
     ffmpeg_path = shutil.which("ffmpeg")
-    termux_failed = False
     if termux_rec and ffmpeg_path:
         try:
-            # Brief pause so the mic can be released between back-to-back recordings
             time.sleep(0.4)
-            # Use a path under the project cache dir: Termux:API can write there when
-            # invoked from Termux. Python's temp dir may be in a location the API can't write to.
             cache_dir = Path(__file__).resolve().parent / "cache"
             cache_dir.mkdir(exist_ok=True)
             rec_path = str(cache_dir / f"termux_rec_{time.monotonic_ns()}.opus")
@@ -275,7 +71,6 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
                 capture_output=True,
                 timeout=duration_sec + 8,
             )
-            # Give termux-microphone-record time to finish and flush (recording is duration_sec long)
             time.sleep(max(1.0, duration_sec * 0.3))
             data = b""
             for _ in range(5):
@@ -294,8 +89,6 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
             if data and len(data) >= 100:
                 if debug:
                     print(f"[Termux debug] opus file: {len(data)} bytes")
-                # Write to temp file; Termux ffmpeg often fails (234) on opus from pipe,
-                # and sometimes from file. opusdec (opus-tools) is more reliable.
                 with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tmp:
                     tmp.write(data)
                     tmp_path = tmp.name
@@ -350,7 +143,6 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
             elif debug:
                 print(f"[Termux debug] termux-microphone-record: no data (file empty or missing)")
         except subprocess.TimeoutExpired:
-            termux_failed = True
             if not getattr(_record_segment_termux, "_timeout_warned", False):
                 _record_segment_termux._timeout_warned = True
                 print(
@@ -360,11 +152,10 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
             if debug:
                 print("[Termux debug] trying PulseAudio (sox).")
         except Exception as e:
-            termux_failed = True
             if debug:
                 print(f"[Termux debug] termux record error: {e}")
 
-    # 2) Fallback: sox from PulseAudio (on many Termux setups only sink.monitor = speaker)
+    # 2) Fallback: sox from PulseAudio
     sox_path = shutil.which("sox")
     if not sox_path:
         return None, None
@@ -397,20 +188,12 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
 def _wait_speech_recognition(*, stop_event=None) -> bool:
     """
     Continuously record short clips and run Google Speech Recognition
-    to detect the wake word.
-
-    On Termux, uses termux-microphone-record (Termux:API) when available so
-    the real mic is used; otherwise sox+PulseAudio (which often only has
-    speaker monitor, not mic).
+    to detect the wake word "Doraemon".
     """
-    import os
-    import shutil
-
     import speech_recognition as sr
 
-    wake_word = config.WAKE_WORD.lower()
-    segment_duration = 3  # shorter = faster response; only "Doraemon" triggers
-    sample_rate = config.PORCUPINE_SAMPLE_RATE
+    wake_word_str = config.WAKE_WORD.lower()
+    segment_duration = 3
     sample_width = 2
 
     use_termux_api = shutil.which("termux-microphone-record") is not None
@@ -431,7 +214,7 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         if stop_event is not None and stop_event.is_set():
             return False
 
-        raw_data, rate = _record_segment_termux(segment_duration, sample_rate)
+        raw_data, rate = _record_segment_termux(segment_duration, SAMPLE_RATE)
         if not raw_data:
             continue
 
@@ -458,25 +241,16 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         if not text:
             continue
 
-        if _matches_wake_word(text, wake_word):
+        if _matches_wake_word(text, wake_word_str):
             print(f'[Termux] Wake word detected: "{text}"')
             return True
         if debug:
             print(f'[Termux debug] Heard (ignored): "{text}"')
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
 def wait_for_wake_word(*, stop_event=None) -> bool:
     """
-    Block until the wake word is detected.
-
-    On desktop: always uses Porcupine (efficient, offline).
-    On Termux:  uses Porcupine if the native library loaded successfully,
-                otherwise falls back to sox + Google Speech Recognition.
+    Block until the wake word "Doraemon" is detected.
+    Uses Google Speech Recognition (no Picovoice on Termux).
     """
-    if IS_TERMUX and _porcupine_mod is None:
-        return _wait_speech_recognition(stop_event=stop_event)
-    return _wait_porcupine(stop_event=stop_event)
+    return _wait_speech_recognition(stop_event=stop_event)

@@ -1,18 +1,18 @@
 # Doraemon-car-music-bot
 
+**Mobile only** — runs on **Android via Termux**. No PC/desktop support.
+
 Doraemon is a personal AI voice bot for your car. Say **"Doraemon"** (wake word only), then a song name; it replies **"Si?"** and, after your command, **"Ah claro amigo!"** and plays from YouTube. All in Portuguese with a Spanish accent (Doraemon-style).
 
 ## Features
 
-- **Wake word: "Doraemon" only** — No alternatives; uses Picovoice Porcupine (desktop) or Google Speech Recognition (Termux).
+- **Wake word: "Doraemon" only** — Google Speech Recognition (Picovoice does not work on Termux).
 - **Voice commands** — After "Si?", say a song or artist (e.g. "toca avenged sevenfold"); bot says "Ah claro amigo!" and streams audio.
 - **Doraemon voice** — Portuguese phrases with Spanish-accent TTS; optional pre-recorded clips for instant "Si?" and "Ah claro amigo!".
 - **Stop command** — Say "stop" after the wake word to stop playback.
-- **Cross-platform** — macOS, Linux, Windows, and **Android via Termux**.
+- **Android (Termux) only** — No desktop/PC use.
 
 ## Quick start (Termux / Android)
-
-This is the primary target platform for in-car use.
 
 ### 1. Install Termux and add-ons
 
@@ -54,28 +54,16 @@ cd Doraemon-car-music-bot
 pip install -r requirements-termux.txt
 ```
 
-### 5. Picovoice setup
-
-1. Sign up at [Picovoice Console](https://console.picovoice.ai/) (free).
-2. Copy your **Access Key**.
-3. Create a custom wake word:
-   - In the Console, open **Porcupine** > create keyword (e.g. "Doraemon").
-   - **Important:** select **Android** as the target platform.
-   - Train and download the `.ppn` file.
-   - Copy it into the project folder.
-
-### 6. Configure
+### 5. Configure
 
 ```bash
 cp .env.example .env
 ```
 
 Edit `.env`:
-- **On desktop:** Set `PICOVOICE_ACCESS_KEY` and `WAKE_WORD_MODEL_PATH` to your Doraemon `.ppn` (required; no fallback). Train "Doraemon" at [Picovoice Console](https://console.picovoice.ai/) and download the .ppn for your platform.
-- **On Termux:** Porcupine is optional; if it doesn't load, the bot uses Google Speech Recognition and triggers only on "Doraemon".
 - **Language:** Set `SPEECH_LANGUAGE=pt-PT` so "Doraemon" is recognized. `FEEDBACK_LANGUAGE=pt` gives the Doraemon persona ("Si?", "Ah claro amigo!", etc., with Spanish accent). Set `PHRASE_LANGUAGE=en-US` if you say song names in English.
 
-### 7. Hands-free like "Hey Siri" (no taps)
+### 6. Hands-free like "Hey Siri" (no taps)
 
 No tapping the screen. Doraemon starts when the phone boots and listens for the wake word. You turn it off by voice.
 
@@ -126,7 +114,7 @@ If the log is empty or shows a Python error, the script failed (e.g. wrong path:
 cd ~/Doraemon-car-music-bot   # or your actual path
 python main.py
 ```
-If it crashes when you run it, fix that first (e.g. missing .env, or on desktop a missing PICOVOICE_ACCESS_KEY).
+If it crashes when you run it, fix that first (e.g. missing .env).
 
 **2. Is the microphone working?**  
 With `python main.py` running in the foreground, you should see either:
@@ -149,43 +137,7 @@ If the bot runs when you start it manually but not after reboot: open **Termux:B
 
 ---
 
-## Desktop setup (macOS / Linux / Windows)
-
-### Prerequisites
-
-- **Python 3.10+**
-- **mpv** and **ffmpeg**
-  - macOS: `brew install mpv ffmpeg portaudio`
-  - Linux: `sudo apt install mpv ffmpeg portaudio19-dev`
-  - Windows: install from official sites
-- **Microphone**
-- **Internet connection**
-
-### Install
-
-```bash
-git clone https://github.com/diogopipas/Doraemon-car-music-bot.git
-cd Doraemon-car-music-bot
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### Configure
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-- Set `PICOVOICE_ACCESS_KEY` to your key from [Picovoice Console](https://console.picovoice.ai/) (required on desktop).
-- Set `WAKE_WORD_MODEL_PATH` to your Doraemon `.ppn` file for **macOS** / **Linux** / **Windows** (required on desktop; train "Doraemon" at Picovoice and download the .ppn for your OS).
-
-### Run
-
-```bash
-python main.py
-```
+**No desktop support.** This app is designed for Android (Termux) only. If you run it on a PC, it will exit with a message.
 
 ---
 
@@ -205,8 +157,6 @@ python main.py
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `PICOVOICE_ACCESS_KEY` | On desktop | Access key from [Picovoice Console](https://console.picovoice.ai/). Not needed on Termux when using SR fallback. |
-| `WAKE_WORD_MODEL_PATH` | On desktop | Path to Doraemon `.ppn` wake word file. Must match your platform. Train at [Picovoice Console](https://console.picovoice.ai/). |
 | `FEEDBACK_LANGUAGE` | No | `pt` = Doraemon persona (Portuguese + Spanish accent). Default: `pt`. |
 | `SPEECH_LANGUAGE` | No | Language for recognizing "Doraemon" (e.g. `pt-PT`). |
 | `PHRASE_LANGUAGE` | No | Language for recognizing the *song name* (e.g. `en-US`). Empty = use `SPEECH_LANGUAGE`. |
@@ -217,14 +167,13 @@ python main.py
 
 ```
 Doraemon-car-music-bot/
-  main.py                   # Entry point
-  requirements.txt          # Desktop dependencies
-  requirements-termux.txt   # Termux (Android) dependencies
+  main.py                   # Entry point (Android/Termux only)
+  requirements-termux.txt   # Dependencies (Termux)
   scripts/                   # Termux boot script (hands-free) and optional widget scripts
   doraemon/
     config.py               # Environment and settings
     audio.py                # Platform-aware microphone (PvRecorder or sox)
-    wake_word.py            # Porcupine wake word detection
+    wake_word.py            # Wake word "Doraemon" via Google Speech Recognition
     listener.py             # Speech recognition (song name)
     player.py               # YouTube search + mpv playback
     feedback.py             # Google TTS voice feedback via mpv
@@ -241,9 +190,9 @@ Doraemon-car-music-bot/
   --> [Back to listening]
 ```
 
-- **Wake word:** Only "Doraemon" triggers. Desktop: Porcupine (.ppn required). Termux: Porcupine if available, else Google Speech Recognition.
+- **Wake word:** Only "Doraemon" triggers, via Google Speech Recognition.
 - **Voice:** Doraemon persona = Portuguese phrases with Spanish-accent TTS (gTTS). Optional pre-recorded `doraemon/assets/si.mp3` and `ah_claro_amigo.mp3` for instant response.
-- **Playback:** mpv streams YouTube audio on all platforms.
+- **Playback:** mpv streams YouTube audio.
 
 ## License
 
