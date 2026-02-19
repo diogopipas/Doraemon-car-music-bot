@@ -452,10 +452,11 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         if not text:
             continue
 
-        print(f'[Termux] Heard: "{text}"')
-
         if _matches_wake_word(text, wake_word):
+            print(f'[Termux] Wake word detected: "{text}"')
             return True
+        if debug:
+            print(f'[Termux debug] Heard (ignored): "{text}"')
 
 
 # ---------------------------------------------------------------------------

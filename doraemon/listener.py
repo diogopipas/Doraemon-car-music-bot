@@ -43,16 +43,22 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
                 capture_output=True,
                 timeout=duration + 8,
             )
+            # Give termux-microphone-record time to flush; retry read (like wake_word path)
             time.sleep(2)
             data = b""
-            try:
-                with open(rec_path, "rb") as f:
-                    data = f.read()
-            finally:
+            for _ in range(5):
                 try:
-                    os.unlink(rec_path)
-                except Exception:
+                    with open(rec_path, "rb") as f:
+                        data = f.read()
+                except FileNotFoundError:
                     pass
+                if data and len(data) >= 100:
+                    break
+                time.sleep(1)
+            try:
+                os.unlink(rec_path)
+            except Exception:
+                pass
             if data and len(data) >= 100:
                 with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tmp:
                     tmp.write(data)

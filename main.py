@@ -42,6 +42,9 @@ def main() -> None:
             feedback.speak("Yes?", block=True)
             phrase = listener.listen_for_song_name()
             if not phrase:
+                feedback.speak("Try again?", block=True)
+                phrase = listener.listen_for_song_name()
+            if not phrase:
                 feedback.speak("Sorry, I didn't catch that.", block=True)
                 continue
             phrase_lower = phrase.strip().lower()
