@@ -404,7 +404,7 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
     import speech_recognition as sr
 
     wake_word = config.WAKE_WORD.lower()
-    segment_duration = 3
+    segment_duration = 4  # longer window = more chance to catch full "Doraemon"
     sample_rate = config.PORCUPINE_SAMPLE_RATE
     sample_width = 2
 
@@ -441,7 +441,10 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         except sr.UnknownValueError:
             no_speech_count += 1
             if debug and no_speech_count % 5 == 1:
-                print("[Termux debug] Google: no speech in segment")
+                print(
+                    "[Termux debug] Google: no speech in segment. "
+                    "Say the wake word clearly in one go; set SPEECH_LANGUAGE in .env to your language (e.g. pt-PT)."
+                )
             continue
         except sr.RequestError as exc:
             print(f"[Termux] Speech API error: {exc}")
