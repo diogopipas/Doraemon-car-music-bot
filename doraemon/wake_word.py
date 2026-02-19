@@ -88,17 +88,18 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
                 capture_output=True,
                 timeout=duration_sec + 8,
             )
-            time.sleep(max(1.0, duration_sec * 0.3))
+            # Give Termux:API time to flush the file (Android storage can be slow)
+            time.sleep(max(2.5, duration_sec * 0.8))
             data = b""
-            for _ in range(5):
+            for _ in range(8):
                 try:
                     with open(rec_path, "rb") as f:
                         data = f.read()
                 except FileNotFoundError:
                     pass
-                if data and len(data) >= 100:
+                if data and len(data) >= 500:
                     break
-                time.sleep(1)
+                time.sleep(0.8)
             try:
                 os.unlink(rec_path)
             except Exception:
@@ -246,17 +247,21 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         if speech_lang:
             kwargs["language"] = speech_lang
 
+        # Log how much audio we're sending (16-bit mono = 2 bytes per sample)
+        pcm_sec = len(raw_data) / (SAMPLE_RATE * 2)
+        if pcm_sec < 1.5:
+            print(f"[Termux] Audio very short (~{pcm_sec:.1f}s). Wait for « Listening » then say Doraemon.")
         try:
             text = recognizer.recognize_google(audio, **kwargs)
         except sr.UnknownValueError:
-            print("[Termux] No speech in segment. Say « Doraemon » now.")
+            print(f"[Termux] No speech in segment (~{pcm_sec:.1f}s). Try SPEECH_LANGUAGE= or en-US in .env, then say « Doraemon ».")
             continue
         except sr.RequestError as exc:
             print(f"[Termux] Speech API error: {exc}")
             continue
 
         if not text:
-            print("[Termux] No speech in segment. Say « Doraemon » now.")
+            print(f"[Termux] No speech in segment (~{pcm_sec:.1f}s). Say « Doraemon » now.")
             continue
 
         if _matches_wake_word(text, wake_word_str):
