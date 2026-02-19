@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import time
 import wave
+from pathlib import Path
 
 import speech_recognition as sr
 
@@ -28,8 +29,10 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
     ffmpeg_path = shutil.which("ffmpeg")
     if termux_rec and ffmpeg_path:
         try:
-            with tempfile.NamedTemporaryFile(suffix=".opus", delete=False) as f:
-                rec_path = f.name
+            # Path under project cache so Termux:API can write (Python temp dir may not be writable by API)
+            cache_dir = Path(__file__).resolve().parent / "cache"
+            cache_dir.mkdir(exist_ok=True)
+            rec_path = str(cache_dir / f"termux_phrase_{time.monotonic_ns()}.opus")
             subprocess.run(
                 [
                     termux_rec,

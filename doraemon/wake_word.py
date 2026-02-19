@@ -252,8 +252,11 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
         try:
             # Brief pause so the mic can be released between back-to-back recordings
             time.sleep(0.4)
-            with tempfile.NamedTemporaryFile(suffix=".opus", delete=False) as tmp:
-                rec_path = tmp.name
+            # Use a path under the project cache dir: Termux:API can write there when
+            # invoked from Termux. Python's temp dir may be in a location the API can't write to.
+            cache_dir = Path(__file__).resolve().parent / "cache"
+            cache_dir.mkdir(exist_ok=True)
+            rec_path = str(cache_dir / f"termux_rec_{time.monotonic_ns()}.opus")
             subprocess.run(
                 [
                     termux_rec,
