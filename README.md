@@ -135,6 +135,12 @@ With the bot running in the foreground, say **"Doraemon"** clearly. Watch the te
 **4. Battery / boot.**  
 If the bot runs when you start it manually but not after reboot: open **Termux:Boot** once (tap its icon), and in **Settings → Apps → Termux → Battery** set to **Unrestricted**. Then reboot and check step 1 again.
 
+**5. "[Playing] …" but no sound?**  
+- Run **`pulseaudio --start`** before starting the bot (add to `~/.bashrc` to run automatically).
+- Check mpv’s errors: **`cat ~/Doraemon-car-music-bot/doraemon/cache/mpv_stderr.log`** after trying to play something. Look for "Failed to open audio device", "No such sink", or "Connection refused".
+- List sinks: **`pactl list sinks short`** — you should see a sink (e.g. `module-sles-sink` or similar). If the list is empty or PulseAudio isn’t running, audio won’t play.
+- Test mpv by hand: **`mpv --no-video --ao=pulse 'https://www.youtube.com/watch?v=fJ9rUzIMcZQ'`** — if that has no sound, the issue is PulseAudio/mpv on your device, not the bot.
+
 ---
 
 **No desktop support.** This app is designed for Android (Termux) only. If you run it on a PC, it will exit with a message.
