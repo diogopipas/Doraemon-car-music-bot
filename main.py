@@ -61,8 +61,10 @@ def main() -> None:
                 sys.exit(0)
             result = player.play_song(phrase)
             if result.success:
+                print(f"[Playing] {result.title}")
                 feedback.speak_phrase("playing", block=True, title=result.title)
             else:
+                print(f"[Could not play] {phrase}")
                 feedback.speak_phrase("not_found", block=True, phrase=phrase)
         except KeyboardInterrupt:
             print("\nBye!")

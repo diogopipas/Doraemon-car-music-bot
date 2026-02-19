@@ -4,17 +4,22 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import sys
 from typing import NamedTuple
 
 import yt_dlp
+
+from .audio import IS_TERMUX
 
 # Track current playback so it can be stopped when a new song is requested
 _current_process: subprocess.Popen | None = None
 
 # Phrases to strip from the start of a voice command so the search query is just song/artist.
-# User can say "play X", "I want you to play this song: X by Y", etc.
+# User can say "play X", "toca X", "I want you to play this song: X by Y", etc.
 _SEARCH_PREFIXES = (
     r"^(?:play\s+)+",
+    r"^toca\s+",  # Portuguese "play"
+    r"^tocar\s+",
     r"^i want (?:you to )?play\s+",
     r"^i want to hear\s+",
     r"^can you play\s+",
@@ -90,23 +95,31 @@ def play_song(query: str) -> PlayResult:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f"ytsearch1:{query}", download=False)
             if not info:
+                print(f"[player] No result for: {query}", file=sys.stderr)
                 return PlayResult(title=query, success=False)
             # ytsearch1 returns a single result
             title = info.get("title") or query
             url = info.get("webpage_url") or info.get("url")
             if not url:
+                print(f"[player] No URL for: {title}", file=sys.stderr)
                 return PlayResult(title=title, success=False)
-    except Exception:
+    except Exception as e:
+        print(f"[player] yt-dlp error: {e}", file=sys.stderr)
         return PlayResult(title=query, success=False)
 
     mpv_path = _find_mpv()
+    # On Termux, force PulseAudio so audio actually plays
+    mpv_cmd = [mpv_path, "--no-video", "--no-terminal", url]
+    if IS_TERMUX:
+        mpv_cmd.insert(-1, "--ao=pulse")
     try:
         _current_process = subprocess.Popen(
-            [mpv_path, "--no-video", "--no-terminal", url],
+            mpv_cmd,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         return PlayResult(title=title, success=True)
-    except Exception:
+    except Exception as e:
+        print(f"[player] mpv error: {e}", file=sys.stderr)
         return PlayResult(title=title, success=False)
