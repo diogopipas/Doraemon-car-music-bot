@@ -20,16 +20,31 @@ def _normalise_phrase(s: str) -> str:
     return re.sub(r"[\s\-'\".,!?]+", "", s.lower())
 
 
+# Normalized forms Google might use for "Doraemon"
+_WAKE_NORMALIZED_FORMS = frozenset({
+    "doraemon",
+    "doramon",   # single m
+    "doraimon", # with i
+})
+
+
 def _matches_wake_word(text: str, wake_word: str) -> bool:
     """
-    Check whether *text* contains the wake word "Doraemon" only.
-    Tolerates transcription variants by normalising spaces/punctuation.
+    Check whether *text* is or contains "Doraemon" (or common mishearings).
+    Tolerates transcription variants and spelling (Doramon, Dora e mon, etc.).
     """
-    if not wake_word:
+    if not (text or "").strip():
         return False
     normalise = _normalise_phrase
     target = normalise(text)
-    return normalise(wake_word) in target
+    # Exact match (user said only "Doraemon")
+    if target in _WAKE_NORMALIZED_FORMS:
+        return True
+    # Wake word appears inside what was said
+    for form in _WAKE_NORMALIZED_FORMS:
+        if form in target:
+            return True
+    return False
 
 
 # Sample rate for Google Speech Recognition (16 kHz is standard)
@@ -244,8 +259,8 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         if _matches_wake_word(text, wake_word_str):
             print(f'[Termux] Wake word detected: "{text}"')
             return True
-        if debug:
-            print(f'[Termux debug] Heard (ignored): "{text}"')
+        # Always show what was heard so you can fix SPEECH_LANGUAGE or pronunciation
+        print(f'[Termux] Heard (not wake word): "{text}"')
 
 
 def wait_for_wake_word(*, stop_event=None) -> bool:

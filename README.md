@@ -126,9 +126,9 @@ If you see **"ffmpeg failed (code 234)"** in the log but opus file size is shown
 
 **3. Is the wake word being heard?**  
 With the bot running in the foreground, say **"Doraemon"** clearly. Watch the terminal:
-- If you see `[Termux] Heard: "something"` but not "doraemon", Google is hearing you but transcribing differently. Try saying **"Doraemon"** more clearly, or set `SPEECH_LANGUAGE` in `.env` to your language (e.g. `pt-PT` for Portuguese).
-- If you never see `Heard:` at all, the mic isn't delivering usable audio (back to step 2).
-- If you see `Heard: "doraemon"` (or similar) and the bot still doesn't say "Si?", there may be a bug — check the rest of the log.
+- The bot prints `[Termux] Heard (not wake word): "…"` so you always see what Google heard. Try saying **"Doraemon"** more clearly, or set `SPEECH_LANGUAGE` in `.env` to your language (e.g. `pt-PT` for Portuguese).
+- If you never see any `Heard (not wake word):` line, set `TERMUX_DEBUG=1` and check mic permission.
+- Set `SPEECH_LANGUAGE=pt-PT` in `.env`. The bot accepts "doraemon", "doramon", "doraimon".
 - **Wake word only works right after start, then stops:** The bot uses a unique temp file per recording and a short pause between recordings so the mic is released. If it still happens, try closing other apps using the mic and ensure Termux:API has microphone permission and isn’t battery-restricted.
 - **Songs not recognized after "Si?":** Set `PHRASE_LANGUAGE=en-US` in `.env` if you say song names in English. Say the song name clearly right after the prompt.
 
