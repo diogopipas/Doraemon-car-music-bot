@@ -1,14 +1,14 @@
 # Doraemon-car-music-bot
 
-Doraemon is a personal AI-powered voice recognition bot that plays songs in your car. Say its name ("Doraemon"), then say a song name to play it from YouTube.
+Doraemon is a personal AI voice bot for your car. Say **"Doraemon"** (wake word only), then a song name; it replies **"Si?"** and, after your command, **"Ah claro amigo!"** and plays from YouTube. All in Portuguese with a Spanish accent (Doraemon-style).
 
 ## Features
 
-- **Wake word activation** -- Uses Picovoice Porcupine to listen for "Doraemon" (or a built-in keyword for testing).
-- **Voice commands** -- After the wake word, say a song or artist name; the bot searches YouTube and streams audio.
-- **Voice feedback** -- Google TTS confirms what it heard and what it's playing.
-- **Stop command** -- Say "stop" after the wake word to stop playback.
-- **Cross-platform** -- Runs on macOS, Linux, Windows, and **Android via Termux**.
+- **Wake word: "Doraemon" only** — No alternatives; uses Picovoice Porcupine (desktop) or Google Speech Recognition (Termux).
+- **Voice commands** — After "Si?", say a song or artist (e.g. "toca avenged sevenfold"); bot says "Ah claro amigo!" and streams audio.
+- **Doraemon voice** — Portuguese phrases with Spanish-accent TTS; optional pre-recorded clips for instant "Si?" and "Ah claro amigo!".
+- **Stop command** — Say "stop" after the wake word to stop playback.
+- **Cross-platform** — macOS, Linux, Windows, and **Android via Termux**.
 
 ## Quick start (Termux / Android)
 
@@ -71,9 +71,9 @@ cp .env.example .env
 ```
 
 Edit `.env`:
-- Set `PICOVOICE_ACCESS_KEY` to your key.
-- Set `WAKE_WORD_MODEL_PATH` to the `.ppn` file path (e.g. `doraemon/Dora-e-mon_pt_android_v4_0_0/Dora-e-mon_pt_android_v4_0_0.ppn`).
-- **Your language:** Set `SPEECH_LANGUAGE=pt-PT` (or your locale) so the wake phrase is recognized. Set `WAKE_PHRASES=ok música, ó música` to trigger with a phrase in your language instead of "Doraemon". Set `FEEDBACK_LANGUAGE=pt` so the bot says "Sim?", "Parado.", etc. in your language. Set `PHRASE_LANGUAGE=en-US` if you say song names in English.
+- **On desktop:** Set `PICOVOICE_ACCESS_KEY` and `WAKE_WORD_MODEL_PATH` to your Doraemon `.ppn` (required; no fallback). Train "Doraemon" at [Picovoice Console](https://console.picovoice.ai/) and download the .ppn for your platform.
+- **On Termux:** Porcupine is optional; if it doesn't load, the bot uses Google Speech Recognition and triggers only on "Doraemon".
+- **Language:** Set `SPEECH_LANGUAGE=pt-PT` so "Doraemon" is recognized. `FEEDBACK_LANGUAGE=pt` gives the Doraemon persona ("Si?", "Ah claro amigo!", etc., with Spanish accent). Set `PHRASE_LANGUAGE=en-US` if you say song names in English.
 
 ### 7. Hands-free like "Hey Siri" (no taps)
 
@@ -95,9 +95,9 @@ After that, every time the phone boots, Doraemon starts and listens for the wake
 
 **Daily use (fully voice):**
 
-- **Use it:** Say **"Doraemon"** → it says "Yes?" → say a song name. Connect the phone to your car via **Bluetooth** or **aux** for audio.
+- **Use it:** Say **"Doraemon"** → it says **"Si?"** → say a song name (e.g. "toca avenged sevenfold") → it says **"Ah claro amigo!"** and plays. Connect the phone to your car via **Bluetooth** or **aux** for audio.
 - **Stop the music:** Say **"Doraemon"** → **"stop"**.
-- **Turn off the bot:** Say **"Doraemon"** → **"go to sleep"** (or "goodbye", "stop listening"). It says "Goodbye." and exits. To have it listening again, reboot the phone or start it again (see below).
+- **Turn off the bot:** Say **"Doraemon"** → **"go to sleep"** (or "goodbye", "stop listening"). It says "Adeus." and exits. To have it listening again, reboot the phone or start it again (see below).
 
 **Optional — start only when you connect to the car:**  
 If you don’t want Doraemon running 24/7, use [Tasker](https://play.google.com/store/apps/details?id=net.dinglisch.android.taskerm) (or similar) plus the **Termux Plugin** for Tasker: create a profile that runs when your **car’s Bluetooth** connects, and run the script `~/Doraemon-car-music-bot/scripts/termux-start-doraemon.sh`. Then the bot only starts when you’re in the car. You still turn it off by voice: **"Doraemon"** → **"go to sleep"**.
@@ -126,7 +126,7 @@ If the log is empty or shows a Python error, the script failed (e.g. wrong path:
 cd ~/Doraemon-car-music-bot   # or your actual path
 python main.py
 ```
-If it crashes when you run it, fix that first (missing .env, wrong PICOVOICE_ACCESS_KEY, etc.).
+If it crashes when you run it, fix that first (e.g. missing .env, or on desktop a missing PICOVOICE_ACCESS_KEY).
 
 **2. Is the microphone working?**  
 With `python main.py` running in the foreground, you should see either:
@@ -140,9 +140,9 @@ If you see **"ffmpeg failed (code 234)"** in the log but opus file size is shown
 With the bot running in the foreground, say **"Doraemon"** clearly. Watch the terminal:
 - If you see `[Termux] Heard: "something"` but not "doraemon", Google is hearing you but transcribing differently. Try saying **"Doraemon"** more clearly, or set `SPEECH_LANGUAGE` in `.env` to your language (e.g. `pt-PT` for Portuguese).
 - If you never see `Heard:` at all, the mic isn't delivering usable audio (back to step 2).
-- If you see `Heard: "doraemon"` (or similar) and the bot still doesn't say "Yes?", there may be a bug — check the rest of the log.
-- **Wake word only works right after start, then stops:** The bot now uses a unique temp file per recording and a short pause between recordings so the mic is released. Update to the latest code. If it still happens, try closing other apps using the mic and ensure Termux:API has microphone permission and isn’t battery-restricted.
-- **Songs not recognized after "Yes?":** Set `PHRASE_LANGUAGE=en-US` in `.env` if you say song names in English; set `SPEECH_LANGUAGE` to your language for the wake word. Say the song name clearly right after the prompt.
+- If you see `Heard: "doraemon"` (or similar) and the bot still doesn't say "Si?", there may be a bug — check the rest of the log.
+- **Wake word only works right after start, then stops:** The bot uses a unique temp file per recording and a short pause between recordings so the mic is released. If it still happens, try closing other apps using the mic and ensure Termux:API has microphone permission and isn’t battery-restricted.
+- **Songs not recognized after "Si?":** Set `PHRASE_LANGUAGE=en-US` in `.env` if you say song names in English. Say the song name clearly right after the prompt.
 
 **4. Battery / boot.**  
 If the bot runs when you start it manually but not after reboot: open **Termux:Boot** once (tap its icon), and in **Settings → Apps → Termux → Battery** set to **Unrestricted**. Then reboot and check step 1 again.
@@ -178,9 +178,8 @@ cp .env.example .env
 ```
 
 Edit `.env`:
-- Set `PICOVOICE_ACCESS_KEY` to your key.
-- Optionally set `WAKE_WORD_MODEL_PATH` to a custom `.ppn` file trained for **macOS** / **Linux** / **Windows** (matching your OS).
-  If left empty, the built-in keyword "computer" is used for testing.
+- Set `PICOVOICE_ACCESS_KEY` to your key from [Picovoice Console](https://console.picovoice.ai/) (required on desktop).
+- Set `WAKE_WORD_MODEL_PATH` to your Doraemon `.ppn` file for **macOS** / **Linux** / **Windows** (required on desktop; train "Doraemon" at Picovoice and download the .ppn for your OS).
 
 ### Run
 
@@ -193,26 +192,25 @@ python main.py
 ## Usage
 
 1. Run `python main.py` (or let it auto-start on boot on Android).
-2. Say the wake word: **"Doraemon"** (or **"computer"** if no custom model is set).
-3. When you hear "Yes?", say what you want to hear. You can use natural phrasing:
-   - Just the song: **"Bohemian Rhapsody"**
-   - Song and artist: **"Bohemian Rhapsody by Queen"**
-   - Full sentence: **"Play Bohemian Rhapsody"**, **"I want you to play this song: X by Y"** — the bot strips the extra words and searches for the song/artist.
-4. The bot searches YouTube and streams audio. It says "Playing [title]."
-5. To stop playback: say the wake word, then **"stop"**.
-6. To turn off the bot (hands-free): say the wake word, then **"go to sleep"** (or "goodbye", "stop listening"). It says "Goodbye." and exits.
+2. Say **"Doraemon"** (only this wake word triggers the bot).
+3. When you hear **"Si?"**, say what you want to hear, e.g. **"toca avenged sevenfold"** or **"Bohemian Rhapsody"** or **"Play X by Y"** — the bot strips extra words and searches YouTube.
+4. The bot says **"Ah claro amigo!"** and streams audio.
+5. To stop playback: say **"Doraemon"**, then **"stop"**.
+6. To turn off the bot (hands-free): say **"Doraemon"**, then **"go to sleep"** (or "goodbye", "stop listening"). It says "Adeus." and exits.
 7. Press **Ctrl+C** to quit (when running in a terminal).
+
+**Faster "Si?" and "Ah claro amigo!":** For instant, character-accurate replies, add your own recordings (Spanish accent, Portuguese) as `doraemon/assets/si.mp3` and `doraemon/assets/ah_claro_amigo.mp3`. Otherwise the bot uses Google TTS with Spanish accent.
 
 ## Configuration (.env)
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `PICOVOICE_ACCESS_KEY` | Yes | Access key from [Picovoice Console](https://console.picovoice.ai/). |
-| `WAKE_WORD_MODEL_PATH` | No | Path to custom `.ppn` wake word file. Must match your platform (Android for Termux, macOS for Mac, etc.). |
-| `WAKE_PHRASES` | No | Extra wake phrases in your language, comma-separated (e.g. `ok música, ó música`). Use when "Doraemon" is often misheard. |
-| `FEEDBACK_LANGUAGE` | No | Language for spoken feedback: "Yes?", "Stopped", etc. (e.g. `pt`, `en`, `es`). |
-| `PHRASE_LANGUAGE` | No | Language for recognizing the *song name* (e.g. `en-US`). Empty = use `SPEECH_LANGUAGE`. Set to English if you say song titles in English. |
-| `LISTEN_TIMEOUT` | No | Seconds to wait for speech after wake word (default: 5). |
+| `PICOVOICE_ACCESS_KEY` | On desktop | Access key from [Picovoice Console](https://console.picovoice.ai/). Not needed on Termux when using SR fallback. |
+| `WAKE_WORD_MODEL_PATH` | On desktop | Path to Doraemon `.ppn` wake word file. Must match your platform. Train at [Picovoice Console](https://console.picovoice.ai/). |
+| `FEEDBACK_LANGUAGE` | No | `pt` = Doraemon persona (Portuguese + Spanish accent). Default: `pt`. |
+| `SPEECH_LANGUAGE` | No | Language for recognizing "Doraemon" (e.g. `pt-PT`). |
+| `PHRASE_LANGUAGE` | No | Language for recognizing the *song name* (e.g. `en-US`). Empty = use `SPEECH_LANGUAGE`. |
+| `LISTEN_TIMEOUT` | No | Seconds to wait for speech after "Si?" (default: 3). |
 | `PHRASE_TIME_LIMIT` | No | Max length of spoken phrase in seconds (default: 10). |
 
 ## Project structure
@@ -237,16 +235,15 @@ Doraemon-car-music-bot/
 ## How it works
 
 ```
-[Always listening] --wake word detected--> [Say "Yes?"]
-  --> [Listen for song name] --recognized--> [Search YouTube]
-  --> [Say "Playing <title>"] --> [Stream audio via mpv]
+[Always listening] --"Doraemon" only--> [Say "Si?"]
+  --> [Listen for command] --recognized--> [Search YouTube]
+  --> [Say "Ah claro amigo!"] --> [Stream audio via mpv]
   --> [Back to listening]
 ```
 
-- **Desktop:** PvRecorder captures mic audio for Porcupine; PyAudio (via SpeechRecognition) captures the song name.
-- **Termux:** sox + PulseAudio captures mic audio for both Porcupine and SpeechRecognition, since PyAudio cannot access Android audio devices.
+- **Wake word:** Only "Doraemon" triggers. Desktop: Porcupine (.ppn required). Termux: Porcupine if available, else Google Speech Recognition.
+- **Voice:** Doraemon persona = Portuguese phrases with Spanish-accent TTS (gTTS). Optional pre-recorded `doraemon/assets/si.mp3` and `ah_claro_amigo.mp3` for instant response.
 - **Playback:** mpv streams YouTube audio on all platforms.
-- **TTS:** gTTS generates MP3s, mpv plays them (cached to avoid repeated API calls).
 
 ## License
 

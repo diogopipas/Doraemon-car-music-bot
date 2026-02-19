@@ -1,4 +1,5 @@
 """Load configuration from environment variables."""
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -24,20 +25,16 @@ def _get_int(key: str, default: int) -> int:
 # Required
 PICOVOICE_ACCESS_KEY: str = _get_str("PICOVOICE_ACCESS_KEY")
 
-# Optional: path to custom wake word .ppn file (e.g. "Doraemon")
+# Required on desktop when using Porcupine: path to Doraemon wake word .ppn file.
 # Use a path matching your platform (Android .ppn on Termux, macOS .ppn on Mac).
-# Relative paths are resolved from PROJECT_ROOT so the same .env works on both.
+# Relative paths are resolved from PROJECT_ROOT. Train "Doraemon" at https://console.picovoice.ai/
 WAKE_WORD_MODEL_PATH: str = _get_str("WAKE_WORD_MODEL_PATH")
 
-# Wake word phrase for Termux speech-recognition fallback (default: "doraemon")
+# Wake word for Termux speech-recognition fallback. Only "Doraemon" triggers the bot (no alternatives).
 WAKE_WORD: str = _get_str("WAKE_WORD", "doraemon")
 
-# Optional: extra wake phrases in your language (comma-separated). Use when "Doraemon" is
-# not in your language and is misheard. E.g. "ok música, ó música" so saying that triggers the bot.
-WAKE_PHRASES: str = _get_str("WAKE_PHRASES", "")
-
-# Optional: language for TTS feedback ("Yes?", "Stopped", etc.). E.g. "pt", "en", "es".
-FEEDBACK_LANGUAGE: str = _get_str("FEEDBACK_LANGUAGE", "en")
+# Language for TTS feedback. "pt" = Doraemon persona (Portuguese phrases, Spanish accent). E.g. "pt", "en".
+FEEDBACK_LANGUAGE: str = _get_str("FEEDBACK_LANGUAGE", "pt")
 
 # Optional: language for recognizing the song name. Defaults to SPEECH_LANGUAGE.
 # Set to "en-US" if you say song names in English; keep SPEECH_LANGUAGE for wake word (your language).
@@ -49,11 +46,11 @@ PHRASE_LANGUAGE: str | None = _phrase.strip() if _phrase.strip() else None
 PULSE_SOURCE: str = _get_str("PULSE_SOURCE", "default")
 
 # Optional: speech recognition language for the wake word (e.g. "pt-PT", "en-US").
-# Set to your language so "Doraemon" or WAKE_PHRASES are recognized.
-SPEECH_LANGUAGE: str = _get_str("SPEECH_LANGUAGE", "en-US")
+# Set to your language so "Doraemon" is recognized (e.g. pt-PT for Portuguese).
+SPEECH_LANGUAGE: str = _get_str("SPEECH_LANGUAGE", "pt-PT")
 
-# Optional: speech recognition timeouts (seconds)
-LISTEN_TIMEOUT: int = _get_int("LISTEN_TIMEOUT", 5)
+# Speech recognition timeouts (seconds). Shorter LISTEN_TIMEOUT = faster silence detection.
+LISTEN_TIMEOUT: int = _get_int("LISTEN_TIMEOUT", 3)
 PHRASE_TIME_LIMIT: int = _get_int("PHRASE_TIME_LIMIT", 10)
 
 # Optional: set to 1 to print wake-word recording diagnostics on Termux

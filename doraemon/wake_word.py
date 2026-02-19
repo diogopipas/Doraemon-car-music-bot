@@ -153,7 +153,7 @@ else:
 # ---------------------------------------------------------------------------
 
 def _create_porcupine():
-    """Create Porcupine instance with custom .ppn or built-in keyword."""
+    """Create Porcupine instance with custom Doraemon .ppn. No fallback; .ppn is required."""
     access_key = config.PICOVOICE_ACCESS_KEY
     if not access_key:
         raise ValueError(
@@ -161,32 +161,33 @@ def _create_porcupine():
         )
 
     model_path = (config.WAKE_WORD_MODEL_PATH or "").strip()
-    if model_path:
-        p = Path(model_path).expanduser()
-        if not p.is_absolute():
-            p = config.PROJECT_ROOT / p
-        p = p.resolve()
-        if p.exists():
-            try:
-                return _porcupine_mod.create(
-                    access_key=access_key,
-                    keyword_paths=[str(p)],
-                )
-            except _porcupine_mod.PorcupineInvalidArgumentError as e:
-                err_msg = str(e).lower()
-                if "different platform" in err_msg or "incorrect format" in err_msg:
-                    print(
-                        "[wake_word] Custom .ppn is for another platform (e.g. Android .ppn on macOS). "
-                        "Using built-in 'computer' keyword. For custom wake word on this machine, "
-                        "download the .ppn for your platform from https://console.picovoice.ai/"
-                    )
-                else:
-                    raise
-    # Fallback to built-in keyword for testing without custom "Doraemon" model
-    return _porcupine_mod.create(
-        access_key=access_key,
-        keywords=["computer"],
-    )
+    if not model_path:
+        raise ValueError(
+            "Doraemon wake word requires a custom .ppn. Set WAKE_WORD_MODEL_PATH in .env. "
+            "Train 'Doraemon' at https://console.picovoice.ai/ and download the .ppn for your platform."
+        )
+    p = Path(model_path).expanduser()
+    if not p.is_absolute():
+        p = config.PROJECT_ROOT / p
+    p = p.resolve()
+    if not p.exists():
+        raise ValueError(
+            f"Doraemon wake word .ppn not found: {p}. "
+            "Set WAKE_WORD_MODEL_PATH in .env to your Doraemon .ppn file."
+        )
+    try:
+        return _porcupine_mod.create(
+            access_key=access_key,
+            keyword_paths=[str(p)],
+        )
+    except _porcupine_mod.PorcupineInvalidArgumentError as e:
+        err_msg = str(e).lower()
+        if "different platform" in err_msg or "incorrect format" in err_msg:
+            raise ValueError(
+                "Your .ppn is for another platform (e.g. Android .ppn on macOS). "
+                "Download the Doraemon .ppn for this platform from https://console.picovoice.ai/"
+            ) from e
+        raise
 
 
 def _wait_porcupine(*, stop_event=None) -> bool:
@@ -220,20 +221,16 @@ def _normalise_phrase(s: str) -> str:
     return re.sub(r"[\s\-'\".,!?]+", "", s.lower())
 
 
-def _matches_wake_word(text: str, wake_word: str, extra_phrases: list[str] | None = None) -> bool:
+def _matches_wake_word(text: str, wake_word: str) -> bool:
     """
-    Check whether *text* contains the wake word or any extra phrase (e.g. "ok música").
+    Check whether *text* contains the wake word "Doraemon" only.
     Tolerates transcription variants by normalising spaces/punctuation.
     """
+    if not wake_word:
+        return False
     normalise = _normalise_phrase
     target = normalise(text)
-    phrases = [wake_word]
-    if extra_phrases:
-        phrases.extend(extra_phrases)
-    for p in phrases:
-        if p and normalise(p) in target:
-            return True
-    return False
+    return normalise(wake_word) in target
 
 
 def _record_segment_termux(duration_sec: int, sample_rate: int):
@@ -412,8 +409,7 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
     import speech_recognition as sr
 
     wake_word = config.WAKE_WORD.lower()
-    extra = [p.strip().lower() for p in getattr(config, "WAKE_PHRASES", "").split(",") if p.strip()]
-    segment_duration = 4  # longer window = more chance to catch full phrase
+    segment_duration = 3  # shorter = faster response; only "Doraemon" triggers
     sample_rate = config.PORCUPINE_SAMPLE_RATE
     sample_width = 2
 
@@ -425,10 +421,7 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
             '[Termux] termux-microphone-record not found — using PulseAudio. '
             'If the mic does not work, install Termux:API and pkg install termux-api'
         )
-    if extra:
-        print(f'[Termux] Listening for wake phrase(s): "{config.WAKE_WORD}" or {extra} …')
-    else:
-        print(f'[Termux] Listening for wake word "{config.WAKE_WORD}" …')
+    print('[Termux] Listening for wake word "Doraemon" …')
 
     recognizer = sr.Recognizer()
     debug = getattr(config, "TERMUX_DEBUG", False)
@@ -465,7 +458,7 @@ def _wait_speech_recognition(*, stop_event=None) -> bool:
         if not text:
             continue
 
-        if _matches_wake_word(text, wake_word, extra):
+        if _matches_wake_word(text, wake_word):
             print(f'[Termux] Wake word detected: "{text}"')
             return True
         if debug:
