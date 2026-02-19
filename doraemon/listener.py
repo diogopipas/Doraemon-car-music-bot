@@ -41,10 +41,10 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
                     "-c", "1",
                 ],
                 capture_output=True,
-                timeout=duration + 8,
+                timeout=duration + 12,
             )
-            # Give termux-microphone-record time to flush; retry read (like wake_word path)
-            time.sleep(2)
+            # Long recording: give API time to flush file (duration can be 10s)
+            time.sleep(max(3, min(duration // 2, 5)))
             data = b""
             for _ in range(5):
                 try:

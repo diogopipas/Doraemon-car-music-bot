@@ -7,6 +7,7 @@ to play it from YouTube. Say "stop" to stop playback. Say "go to sleep" to turn 
 """
 
 import sys
+import time
 
 from doraemon import config
 from doraemon import feedback
@@ -40,6 +41,8 @@ def main() -> None:
             if not detected:
                 continue
             feedback.speak("Yes?", block=True)
+            # Short pause so user hears "Yes?" and can start speaking
+            time.sleep(0.6)
             phrase = listener.listen_for_song_name()
             if not phrase:
                 feedback.speak("Try again?", block=True)

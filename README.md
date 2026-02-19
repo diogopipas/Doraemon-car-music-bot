@@ -140,6 +140,8 @@ With the bot running in the foreground, say **"Doraemon"** clearly. Watch the te
 - If you see `[Termux] Heard: "something"` but not "doraemon", Google is hearing you but transcribing differently. Try saying **"Doraemon"** more clearly, or set `SPEECH_LANGUAGE` in `.env` to your language (e.g. `pt-PT` for Portuguese).
 - If you never see `Heard:` at all, the mic isn't delivering usable audio (back to step 2).
 - If you see `Heard: "doraemon"` (or similar) and the bot still doesn't say "Yes?", there may be a bug — check the rest of the log.
+- **Wake word only works right after start, then stops:** The bot now uses a unique temp file per recording and a short pause between recordings so the mic is released. Update to the latest code. If it still happens, try closing other apps using the mic and ensure Termux:API has microphone permission and isn’t battery-restricted.
+- **Songs not recognized after "Yes?":** Set `SPEECH_LANGUAGE` in `.env` to the language you speak (e.g. `pt-PT`, `es-ES`, `en-US`). Say the song name clearly right after "Yes?"; you have a few seconds before it stops listening.
 
 **4. Battery / boot.**  
 If the bot runs when you start it manually but not after reboot: open **Termux:Boot** once (tap its icon), and in **Settings → Apps → Termux → Battery** set to **Unrestricted**. Then reboot and check step 1 again.

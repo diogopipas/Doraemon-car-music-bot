@@ -242,23 +242,18 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
     debug = getattr(config, "TERMUX_DEBUG", False)
 
     # 1) Try Termux:API microphone (actual mic on Android)
+    # Use a unique temp path per recording so reusing the same path doesn't break after a few runs.
     # -l = length in seconds (letter L; 0 = unlimited). Use separate arg so it's never "-1".
     _limit_opt = "-l"
     termux_rec = shutil.which("termux-microphone-record")
     ffmpeg_path = shutil.which("ffmpeg")
     termux_failed = False
     if termux_rec and ffmpeg_path:
-        rec_path = getattr(config, "TERMUX_RECORD_PATH", "").strip()
-        if not rec_path:
-            cache_dir = Path(__file__).resolve().parent / "cache"
-            cache_dir.mkdir(exist_ok=True)
-            rec_path = str(cache_dir / "termux_rec.opus")
-        else:
-            rec_path = Path(rec_path).expanduser().resolve()
-            rec_path.parent.mkdir(parents=True, exist_ok=True)
-            rec_path = str(rec_path)
         try:
-            # termux-microphone-record blocks until recording finishes (or timeout)
+            # Brief pause so the mic can be released between back-to-back recordings
+            time.sleep(0.4)
+            with tempfile.NamedTemporaryFile(suffix=".opus", delete=False) as tmp:
+                rec_path = tmp.name
             subprocess.run(
                 [
                     termux_rec,
@@ -272,10 +267,10 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
                 capture_output=True,
                 timeout=duration_sec + 8,
             )
-            # If the command returned immediately (API records in background), wait for file
-            time.sleep(2)
+            # Give termux-microphone-record time to finish and flush (recording is duration_sec long)
+            time.sleep(max(1.0, duration_sec * 0.3))
             data = b""
-            for _ in range(3):
+            for _ in range(5):
                 try:
                     with open(rec_path, "rb") as f:
                         data = f.read()
