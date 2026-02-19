@@ -105,6 +105,43 @@ If you prefer a shortcut sometimes, you can use [Termux:Widget](https://f-droid.
 **Test from terminal:**  
 Run `python main.py` once to verify setup; say "go to sleep" to exit. For normal use, rely on boot (or Tasker) and voice only.
 
+### "No response" when I say Doraemon?
+
+Work through these in order:
+
+**1. Is the bot actually running?**  
+Open Termux and run:
+```bash
+pgrep -f "python.*main.py"
+```
+If you see a number, it's running. If nothing, the boot script may not have started it. Check the log:
+```bash
+cat ~/doraemon.log
+```
+If the log is empty or shows a Python error, the script failed (e.g. wrong path: boot uses `$HOME/Doraemon-car-music-bot` — if you cloned elsewhere, set `DORAEMON_DIR` in the boot script or use the full path). Run manually to test:
+```bash
+cd ~/Doraemon-car-music-bot   # or your actual path
+python main.py
+```
+If it crashes when you run it, fix that first (missing .env, wrong PICOVOICE_ACCESS_KEY, etc.).
+
+**2. Is the microphone working?**  
+With `python main.py` running in the foreground, you should see either:
+- `[Termux] Using termux-microphone-record (Termux:API) for mic.` → good, real mic.
+- `termux-microphone-record not found — using PulseAudio` → mic may be speaker-only (no real mic).
+
+If you don't have the real mic: install the **Termux:API** app from F-Droid, grant it **microphone** permission, and run `pkg install termux-api` in Termux. Then restart the bot. You should then see "Using termux-microphone-record".
+
+**3. Is the wake word being heard?**  
+With the bot running in the foreground, say **"Doraemon"** clearly. Watch the terminal:
+- If you see `[Termux] Heard: "something"` but not "doraemon", Google is hearing you but transcribing differently. Try saying **"Doraemon"** more clearly, or set `SPEECH_LANGUAGE` in `.env` to your language (e.g. `pt-PT` for Portuguese).
+- If you never see `Heard:` at all, the mic isn't delivering usable audio (back to step 2).
+- If you see `Heard: "doraemon"` (or similar) and the bot still doesn't say "Yes?", there may be a bug — check the rest of the log.
+
+**4. Battery / boot.**  
+If the bot runs when you start it manually but not after reboot: open **Termux:Boot** once (tap its icon), and in **Settings → Apps → Termux → Battery** set to **Unrestricted**. Then reboot and check step 1 again.
+
+---
 
 ## Desktop setup (macOS / Linux / Windows)
 

@@ -11,9 +11,11 @@ If Porcupine still cannot load (e.g. the native .so is incompatible with
 Android's Bionic libc), falls back to sox + Google Speech Recognition.
 """
 
+import os
 import platform
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from . import config
@@ -234,7 +236,6 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
 
     Returns (raw_pcm_bytes, sample_rate) or (None, None) on failure.
     """
-    import os
     import shutil
     import time
 
@@ -290,10 +291,11 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
             if data and len(data) >= 100:
                 if debug:
                     print(f"[Termux debug] opus file: {len(data)} bytes")
+                # Try pipe first; on some Termux ffmpeg builds stdin fails (e.g. code 234)
                 proc = subprocess.run(
                     [
                         ffmpeg_path,
-                        "-f", "opus",
+                        "-nostdin",
                         "-i", "-",
                         "-f", "s16le",
                         "-ar", str(sample_rate),
@@ -302,15 +304,48 @@ def _record_segment_termux(duration_sec: int, sample_rate: int):
                     ],
                     input=data,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
                     timeout=10,
                 )
-                if proc.returncode == 0 and proc.stdout:
+                if proc.returncode != 0 or not proc.stdout:
+                    # Fallback: write opus to temp file; ffmpeg -i file often works when pipe fails
+                    with tempfile.NamedTemporaryFile(suffix=".opus", delete=False) as tmp:
+                        tmp.write(data)
+                        tmp_path = tmp.name
+                    try:
+                        proc = subprocess.run(
+                            [
+                                ffmpeg_path,
+                                "-y",
+                                "-i", tmp_path,
+                                "-f", "s16le",
+                                "-ar", str(sample_rate),
+                                "-ac", "1",
+                                "-",
+                            ],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            timeout=10,
+                        )
+                        if proc.returncode == 0 and proc.stdout:
+                            if debug:
+                                print(f"[Termux debug] PCM: {len(proc.stdout)} bytes (via file)")
+                            return proc.stdout, sample_rate
+                        if debug and proc.stderr:
+                            err = proc.stderr.decode("utf-8", errors="replace").strip()
+                            print(f"[Termux debug] ffmpeg file fallback failed: {err[:200]}")
+                    finally:
+                        try:
+                            os.unlink(tmp_path)
+                        except Exception:
+                            pass
+                else:
                     if debug:
                         print(f"[Termux debug] PCM: {len(proc.stdout)} bytes")
                     return proc.stdout, sample_rate
-                if debug:
-                    print(f"[Termux debug] ffmpeg failed (code {proc.returncode})")
+                if debug and proc.stderr:
+                    err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+                    print(f"[Termux debug] ffmpeg failed (code {proc.returncode}): {err[:200]}")
             elif debug:
                 print(f"[Termux debug] termux-microphone-record: no data (file empty or missing)")
         except subprocess.TimeoutExpired:

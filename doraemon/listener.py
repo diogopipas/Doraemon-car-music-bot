@@ -57,7 +57,7 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
                 proc = subprocess.run(
                     [
                         ffmpeg_path,
-                        "-f", "opus",
+                        "-nostdin",
                         "-i", "-",
                         "-f", "s16le",
                         "-ar", str(sample_rate),
@@ -69,7 +69,34 @@ def _record_raw_termux(duration: int, sample_rate: int = 16000):
                     stderr=subprocess.DEVNULL,
                     timeout=15,
                 )
-                if proc.returncode == 0 and proc.stdout:
+                if proc.returncode != 0 or not proc.stdout:
+                    # Fallback: ffmpeg -i file (pipe often fails on Termux with code 234)
+                    with tempfile.NamedTemporaryFile(suffix=".opus", delete=False) as tmp:
+                        tmp.write(data)
+                        tmp_path = tmp.name
+                    try:
+                        proc = subprocess.run(
+                            [
+                                ffmpeg_path,
+                                "-y",
+                                "-i", tmp_path,
+                                "-f", "s16le",
+                                "-ar", str(sample_rate),
+                                "-ac", "1",
+                                "-",
+                            ],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL,
+                            timeout=15,
+                        )
+                        if proc.returncode == 0 and proc.stdout:
+                            return proc.stdout, sample_rate
+                    finally:
+                        try:
+                            os.unlink(tmp_path)
+                        except Exception:
+                            pass
+                elif proc.stdout:
                     return proc.stdout, sample_rate
         except subprocess.TimeoutExpired:
             pass
