@@ -106,9 +106,9 @@ def play_song(query: str) -> PlayResult:
             if not info:
                 print(f"[player] No result for: {query}", file=sys.stderr)
                 return PlayResult(title=query, success=False)
-            # ytsearch1 returns a single result
+            # ytsearch1 returns a single result. Prefer direct stream URL so mpv starts immediately.
             title = info.get("title") or query
-            url = info.get("webpage_url") or info.get("url")
+            url = info.get("url") or info.get("webpage_url")
             if not url:
                 print(f"[player] No URL for: {title}", file=sys.stderr)
                 return PlayResult(title=title, success=False)
